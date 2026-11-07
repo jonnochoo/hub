@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from 'react'
 import { useStore } from '../store'
-import { addDays, daysBetween, fmtDate, fmtMins, today } from '../lib/dates'
-import { itemsOf, type Item } from '../lib/md'
+import { addDays, daysBetween, fmtDate, fmtMins, fromIso, today } from '../lib/dates'
+import { itemsOf, onDay, type Item } from '../lib/md'
 import { ticketLabel, type ListKind, type Ticket } from '../lib/model'
 import { useHotkeys } from '../lib/hotkeys'
 import { promptDate } from '../lib/prompts'
@@ -37,7 +37,7 @@ export function TodayView() {
     // Only what is due today (or overdue / already in progress) belongs on the board.
     const rows = useMemo<TRow[]>(() => {
         const routine: TRow[] = []
-        for (const l of s.lists.routine) if (l.item) routine.push({ kind: 'item', list: 'routine', key: l.id, id: l.id, item: l.item, date: t })
+        for (const l of s.lists.routine) if (l.item && onDay(l.item, fromIso(t).getDay())) routine.push({ kind: 'item', list: 'routine', key: l.id, id: l.id, item: l.item, date: t })
 
         const focus: TRow[] = []
         for (const tk of s.tickets) {

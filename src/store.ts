@@ -449,6 +449,7 @@ folder and reloads when files change.
 \`\`\`
 
 - Tasks, learn and questions are either dated (\`due:\`), parked (\`@later\`), or neither = triage.
+- Routine items repeat daily unless they carry \`every:\`, e.g. \`every:mon,wed,fri\` (weekdays = mon..fri). They only show on Today on those days.
 - \`!\` marks high priority, \`due:\` is the due date, \`added:\` / \`done:\` are bookkeeping dates (ISO).
 - Other lines (headings, prose) are preserved as-is.
 

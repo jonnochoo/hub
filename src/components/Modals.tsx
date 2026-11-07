@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { useHotkeys } from '../lib/hotkeys'
 import { fmtDate } from '../lib/dates'
+import { normalizeEvery } from '../lib/md'
 import { ADD_TO_LIST, parseCapture, parseTicketInput, useStore, type AddKind } from '../store'
 import { setTheme, THEMES, getTheme } from '../theme'
 
 const KINDS: { kind: AddKind; label: string; hint: string }[] = [
     { kind: 'task', label: 'Task', hint: 'Reply to Bob ^tom !   (^date or ^later; no date = triage; ! = priority)' },
-    { kind: 'routine', label: 'Daily', hint: 'Check PRs and email   (shows on Today every day)' },
+    { kind: 'routine', label: 'Daily', hint: 'Check PRs  every:weekdays   (daily by default; every:mon,wed,fri)' },
     { kind: 'ticket', label: 'Ticket', hint: 'ABC-123 Fix login https://jira…/ABC-123   (^date or ^later; none = triage)' },
     { kind: 'learn', label: 'Learn', hint: 'Rust lifetimes, https://…' },
     { kind: 'question', label: 'Question', hint: 'Why does the cache miss on cold start?' },
@@ -59,10 +60,21 @@ function AddModal({ initial, due }: { initial: AddKind; due?: string }) {
             toast(`Ticket added${t.key ? ` (${t.key})` : ''}`)
             if (!keepOpen) useStore.getState().setOpenTicket(file)
         } else {
-            const { text: body, due: d, pri, later } = parseCapture(raw)
+            const sched: { v?: string } = {}
+            const rest =
+                kind === 'routine'
+                    ? raw.replace(/(?:^|\s)every:(\S+)/i, (m, v: string) => {
+                          const n = normalizeEvery(v)
+                          if (n === null) return m
+                          sched.v = n || undefined
+                          return ''
+                      })
+                    : raw
+            const { text: body, due: d, pri, later } = parseCapture(rest)
             if (!body) return
             await addItem(ADD_TO_LIST[kind], body, {
                 pri: pri || undefined,
+                every: sched.v,
                 later: later && kind !== 'idea' ? true : undefined,
                 due: d ?? (kind === 'task' ? due : undefined),
             })

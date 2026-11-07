@@ -9,6 +9,7 @@ export interface Item {
     completed?: string
     pri?: boolean
     later?: boolean // parked: no date yet, deliberately not now
+    every?: string // routine schedule, e.g. 'mon,wed,fri'. Undefined = daily
     notes: string[]
 }
 export interface RawLine {
@@ -42,6 +43,12 @@ function parseItemText(s: string): Omit<Item, 'done' | 'notes'> {
         out.later = true
         return ''
     })
+    out.text = out.text.replace(/(?:^|\s)every:([a-z,]+)(?=\s|$)/gi, (m, v: string) => {
+        const n = normalizeEvery(v)
+        if (n === null) return m
+        out.every = n || undefined
+        return ''
+    })
     out.text = out.text.trim()
     return out
 }
@@ -71,6 +78,7 @@ export function serializeItem(it: Item): string[] {
     let head = `- [${it.done ? 'x' : ' '}] ${it.text}`
     if (it.pri) head += ' !'
     if (it.later) head += ' @later'
+    if (it.every) head += ` every:${it.every}`
     if (it.due) head += ` due:${it.due}`
     if (it.added) head += ` added:${it.added}`
     if (it.completed) head += ` done:${it.completed}`
@@ -156,4 +164,56 @@ export const slug = (s: string) =>
 /** Return `lines` with the item `id` replaced by `fn(item)`. */
 export function mapItem(lines: Line[], id: string, fn: (it: Item) => Item): Line[] {
     return lines.map((l) => (l.id === id && l.item ? { id: l.id, item: fn(l.item) } : l))
+}
+
+// ---- routine schedules ------------------------------------------------------
+
+export const DAY_NAMES = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
+/** Display order: Monday first. Values are Date#getDay() indexes. */
+export const WEEK = [1, 2, 3, 4, 5, 6, 0]
+
+/**
+ * Canonical schedule string for user input like "weekdays", "mon wed fri", "daily".
+ * '' means every day. Returns null when the input can't be understood.
+ */
+export function normalizeEvery(input: string): string | null {
+    const tokens = input
+        .toLowerCase()
+        .split(/[\s,]+/)
+        .filter(Boolean)
+    if (!tokens.length) return null
+    const days = new Set<number>()
+    for (const tok of tokens) {
+        if (tok === 'daily' || tok === 'everyday' || tok === 'day') return ''
+        if (tok === 'weekdays') [1, 2, 3, 4, 5].forEach((d) => days.add(d))
+        else if (tok === 'weekends') [6, 0].forEach((d) => days.add(d))
+        else {
+            const i = DAY_NAMES.findIndex((d) => tok.startsWith(d))
+            if (i < 0 || tok.length < 3) return null
+            days.add(i)
+        }
+    }
+    if (days.size === 7) return ''
+    return WEEK.filter((d) => days.has(d))
+        .map((d) => DAY_NAMES[d])
+        .join(',')
+}
+
+/** Is a routine item scheduled on this weekday (Date#getDay index)? */
+export const onDay = (it: Item, day: number): boolean => !it.every || it.every.split(',').includes(DAY_NAMES[day])
+
+export function everyLabel(every: string | undefined): string {
+    if (!every) return 'Daily'
+    if (every === 'mon,tue,wed,thu,fri') return 'Weekdays'
+    if (every === 'sat,sun') return 'Weekends'
+    return every.split(',').map((d) => d[0].toUpperCase() + d.slice(1)).join(' ')
+}
+
+/** Flip one weekday in a schedule. Never leaves it empty. Returns undefined for daily. */
+export function toggleDay(every: string | undefined, day: number): string | undefined {
+    const cur = new Set(every ? every.split(',').map((d) => DAY_NAMES.indexOf(d)) : WEEK)
+    if (cur.has(day)) cur.delete(day)
+    else cur.add(day)
+    if (cur.size === 0) return every
+    return normalizeEvery([...cur].map((d) => DAY_NAMES[d]).join(',')) || undefined
 }

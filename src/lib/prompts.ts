@@ -3,14 +3,14 @@ import { fmtDate, parseDate } from './dates'
 
 const open = (m: Parameters<ReturnType<typeof useStore.getState>['setModal']>[0]) => useStore.getState().setModal(m)
 
-export function promptText(title: string, value: string, onSubmit: (v: string) => void, opts: { multiline?: boolean; hint?: string; allowEmpty?: boolean } = {}) {
+export function promptText(title: string, value: string, onSubmit: (v: string) => void, opts: { multiline?: boolean; hint?: string; allowEmpty?: boolean; validate?: (v: string) => string | null } = {}) {
     open({
         type: 'prompt',
         title,
         value,
         multiline: opts.multiline,
         hint: opts.hint,
-        validate: opts.allowEmpty ? undefined : (v) => (v.trim() ? null : 'Cannot be empty'),
+        validate: opts.validate ?? (opts.allowEmpty ? undefined : (v) => (v.trim() ? null : 'Cannot be empty')),
         onSubmit,
     })
 }

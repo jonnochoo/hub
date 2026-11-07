@@ -2,9 +2,9 @@ import { useMemo } from 'react'
 import { useStore, type AddKind } from '../store'
 import { addDays, fmtDate, parseDate, today } from '../lib/dates'
 import { LIST_TITLE, type ListKind } from '../lib/model'
-import type { ItemLine } from '../lib/md'
+import { DAY_NAMES, WEEK, everyLabel, normalizeEvery, onDay, toggleDay, type ItemLine } from '../lib/md'
 import { useHotkeys } from '../lib/hotkeys'
-import { promptDate } from '../lib/prompts'
+import { promptDate, promptText } from '../lib/prompts'
 import { Chip, Empty, InlineField, NotesField, openFirstUrl, PageHeader, Rich, Row, useCursor } from '../components/ui'
 import { Elapsed } from '../components/Elapsed'
 
@@ -63,7 +63,15 @@ function ItemList({ kind }: { kind: ListKind }) {
         c: () => row && void s.toggleItem(kind, row.id),
         x: () => row && void s.toggleItem(kind, row.id),
         s: () => row && void s.startWork({ kind, ref: row.item.text, label: row.item.text }),
-        d: () => row && promptDate('Due date', row.item.due, (v) => s.patchItem(kind, row.id, v ? { due: v } : { due: undefined })),
+        d: () => {
+            if (!row) return
+            if (kind === 'routine')
+                promptText('Repeats on', row.item.every ?? 'daily', (v) => s.patchItem(kind, row.id, { every: normalizeEvery(v) || undefined }), {
+                    hint: 'daily, weekdays, weekends, or mon,wed,fri',
+                    validate: (v) => (normalizeEvery(v) === null ? 'Try: daily, weekdays, weekends, or mon,wed,fri' : null),
+                })
+            else promptDate('Due date', row.item.due, (v) => s.patchItem(kind, row.id, v ? { due: v } : { due: undefined }))
+        },
         t: () => row && void s.patchItem(kind, row.id, { due: t }).then(() => s.toast('Due today')),
         p: () => row && void s.patchItem(kind, row.id, { due: addDays(row.item.due && row.item.due > t ? row.item.due : t, 1) }),
         '!': () => row && void s.patchItem(kind, row.id, { pri: !row.item.pri }),
@@ -106,6 +114,7 @@ function ItemList({ kind }: { kind: ListKind }) {
                                 {l.item.notes.length > 0 && <span className="note-preview">{l.item.notes.join(' ')}</span>}
                             </span>
                             {working && s.active && <Elapsed start={s.active.start} />}
+                            {kind === 'routine' && <Chip tone={l.item.every ? 'accent' : undefined}>{everyLabel(l.item.every)}</Chip>}
                             {kind !== 'routine' && l.item.due && <Chip tone={overdue ? 'warn' : l.item.due === t ? 'accent' : undefined}>{fmtDate(l.item.due)}</Chip>}
                                         </Row>
                     </div>
@@ -135,6 +144,7 @@ export function ItemDetail({ kind, index }: { kind: ListKind; index: number }) {
         h: back,
         e: () => document.getElementById('f-text')?.focus(),
         d: () => {
+            if (isRoutine) return void document.getElementById('f-every')?.focus()
             if (!it.due) patch({ due: t })
             setTimeout(() => document.getElementById('f-due')?.focus(), 50)
         },
@@ -196,6 +206,32 @@ export function ItemDetail({ kind, index }: { kind: ListKind; index: number }) {
                     >
                         {it.due && <Chip tone={it.due < t && !done ? 'warn' : 'accent'}>{fmtDate(it.due)}</Chip>}
                     </InlineField>
+                )}
+
+                {isRoutine && (
+                    <>
+                        <InlineField
+                            id="f-every"
+                            label="Repeats (d)"
+                            value={it.every ?? 'daily'}
+                            placeholder="daily, weekdays, weekends, or mon,wed,fri"
+                            onCommit={(v) => {
+                                const n = normalizeEvery(v)
+                                if (n === null) s.toast(`Cannot read "${v}". Try daily, weekdays, or mon,wed,fri`)
+                                else patch({ every: n || undefined })
+                            }}
+                        />
+                        <div className="ifield">
+                            <span className="ifield-label">On days</span>
+                            <div className="seg">
+                                {WEEK.map((d) => (
+                                    <button key={d} className={`status-btn${onDay(it, d) ? ' on' : ''}`} onClick={() => patch({ every: toggleDay(it.every, d) })}>
+                                        {DAY_NAMES[d][0].toUpperCase() + DAY_NAMES[d].slice(1)}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    </>
                 )}
 
                 <div className="ifield">
