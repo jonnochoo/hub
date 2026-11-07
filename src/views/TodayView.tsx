@@ -1,17 +1,25 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useStore } from '../store'
 import { addDays, daysBetween, fmtDate, fmtMins, today } from '../lib/dates'
 import { itemsOf, type Item } from '../lib/md'
-import { ticketLabel, type Ticket } from '../lib/model'
+import { ticketLabel, type ListKind, type Ticket } from '../lib/model'
 import { useHotkeys } from '../lib/hotkeys'
 import { promptDate } from '../lib/prompts'
 import { Chip, Empty, PageHeader, Rich, Row, TypeIcon, useCursor } from '../components/ui'
 import { Elapsed } from '../components/Elapsed'
 
+type Section = 'routine' | 'focus' | 'questions' | 'learn'
 type TRow =
-    | { kind: 'ticket'; key: string; t: Ticket; date: string; other?: boolean }
-    | { kind: 'task'; key: string; id: string; item: Item; date: string }
-    | { kind: 'routine'; key: string; id: string; item: Item; date: string }
+    | { kind: 'ticket'; key: string; t: Ticket; date: string }
+    | { kind: 'item'; list: 'tasks' | 'routine' | 'questions' | 'learn'; key: string; id: string; item: Item; date: string }
+
+const SECTION_TITLE: Record<Section, string> = {
+    routine: 'Daily routine',
+    focus: 'Focus',
+    questions: 'Questions due',
+    learn: 'Learn due',
+}
+const sectionOf = (r: TRow): Section => (r.kind === 'ticket' ? 'focus' : r.list === 'tasks' ? 'focus' : r.list)
 
 const daySeed = (d: string) => [...d].reduce((a, c) => a + c.charCodeAt(0), 0)
 
@@ -21,86 +29,84 @@ export function TodayView() {
 
     useEffect(() => {
         void s.loadDaily(t)
-        if (s.dailyDates.find((d) => d < t)) void s.loadDaily(s.dailyDates.find((d) => d < t)!)
+        const prev = s.dailyDates.find((d) => d < t)
+        if (prev) void s.loadDaily(prev)
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [t, s.dailyDates.length])
 
+    // Only what is due today (or overdue / already in progress) belongs on the board.
     const rows = useMemo<TRow[]>(() => {
-        const out: TRow[] = []
-        const others: TRow[] = []
+        const routine: TRow[] = []
+        for (const l of s.lists.routine) if (l.item) routine.push({ kind: 'item', list: 'routine', key: l.id, id: l.id, item: l.item, date: t })
+
+        const focus: TRow[] = []
         for (const tk of s.tickets) {
             if (tk.status === 'done') continue
-            const focus = tk.status === 'in-progress' || (tk.planned && tk.planned <= t)
-            if (focus) out.push({ kind: 'ticket', key: tk.file, t: tk, date: tk.planned || t })
-            else others.push({ kind: 'ticket', key: tk.file, t: tk, date: tk.planned || t, other: true })
+            if (tk.status === 'in-progress' || (tk.planned && tk.planned <= t)) focus.push({ kind: 'ticket', key: tk.file, t: tk, date: tk.planned || t })
         }
-        for (const l of s.lists.tasks) {
-            if (l.item && !l.item.done && l.item.due && l.item.due <= t)
-                out.push({ kind: 'task', key: l.id, id: l.id, item: l.item, date: l.item.due })
-        }
+        for (const l of s.lists.tasks)
+            if (l.item && !l.item.done && l.item.due && l.item.due <= t) focus.push({ kind: 'item', list: 'tasks', key: l.id, id: l.id, item: l.item, date: l.item.due })
         const weight = (r: TRow) => (r.kind === 'ticket' ? (r.t.status === 'in-progress' ? 0 : 1) : r.item.pri ? 0 : 2)
-        out.sort((a, b) => a.date.localeCompare(b.date) || weight(a) - weight(b))
-        // Every other open ticket follows, so nothing falls off the board.
-        const rank = (x: TRow) => (x.kind === 'ticket' ? ['blocked', 'review', 'todo'].indexOf(x.t.status) : 0)
-        others.sort((a, b) => rank(a) - rank(b) || (a.kind === 'ticket' && b.kind === 'ticket' ? a.t.key.localeCompare(b.t.key, undefined, { numeric: true }) : 0))
-        out.push(...others)
-        // The daily routine leads the board, in file order.
-        const routine: TRow[] = []
-        for (const l of s.lists.routine)
-            if (l.item) routine.push({ kind: 'routine', key: l.id, id: l.id, item: l.item, date: t })
-        return [...routine, ...out]
-    }, [s.tickets, s.lists.tasks, s.lists.routine, t])
-    const focusCount = rows.filter((r) => r.kind !== 'routine' && !(r.kind === 'ticket' && r.other)).length
-    const firstFocus = rows.find((r) => r.kind !== 'routine')
-    const firstOther = rows.find((r) => r.kind === 'ticket' && r.other)
-    const routineRows = rows.filter((r) => r.kind === 'routine')
-    const routineDone = routineRows.filter((r) => r.item.completed === t).length
+        focus.sort((a, b) => a.date.localeCompare(b.date) || weight(a) - weight(b))
+
+        const dueOf = (list: 'questions' | 'learn'): TRow[] =>
+            s.lists[list]
+                .filter((l) => l.item && !l.item.done && l.item.due && l.item.due <= t)
+                .map((l) => ({ kind: 'item', list, key: l.id, id: l.id, item: l.item!, date: l.item!.due! }) as TRow)
+                .sort((a, b) => a.date.localeCompare(b.date))
+
+        return [...routine, ...focus, ...dueOf('questions'), ...dueOf('learn')]
+    }, [s.tickets, s.lists, t])
 
     const { cur, setC, nav } = useCursor(rows.length)
     const row = rows[cur]
+    const firstOf = (sec: Section) => rows.find((r) => sectionOf(r) === sec)
+    const routineRows = rows.filter((r) => sectionOf(r) === 'routine')
+    const routineDone = routineRows.filter((r) => r.kind === 'item' && r.item.completed === t).length
 
     const start = (r: TRow) =>
         r.kind === 'ticket'
             ? s.startWork({ kind: 'ticket', ref: r.t.file, label: ticketLabel(r.t) })
-            : s.startWork({ kind: r.kind === 'routine' ? 'routine' : 'tasks', ref: r.item.text, label: r.item.text })
+            : s.startWork({ kind: r.list as ListKind, ref: r.item.text, label: r.item.text })
 
     useHotkeys({
         ...nav,
         Enter: () => {
             if (!row) return
             if (row.kind === 'ticket') s.setOpenTicket(row.t.file)
-            else s.openItemById(row.kind === 'routine' ? 'routine' : 'tasks', row.id)
+            else s.openItemById(row.list, row.id)
         },
         s: () => row && void start(row),
         c: () => {
             if (!row) return
             if (row.kind === 'ticket') void s.setStatus(row.t.file, 'done')
-            else void s.toggleItem(row.kind === 'routine' ? 'routine' : 'tasks', row.id)
+            else void s.toggleItem(row.list, row.id)
         },
         p: () => {
-            if (!row || row.kind === 'routine') return
+            if (!row || (row.kind === 'item' && row.list === 'routine')) return
             const next = addDays(row.date > t ? row.date : t, 1)
             if (row.kind === 'ticket') void s.patchTicket(row.t.file, { planned: next })
-            else void s.patchItem('tasks', row.id, { due: next })
+            else void s.patchItem(row.list, row.id, { due: next })
             s.toast(`Postponed to ${fmtDate(next)}`)
         },
         d: () => {
-            if (!row || row.kind === 'routine') return
+            if (!row || (row.kind === 'item' && row.list === 'routine')) return
             if (row.kind === 'ticket') promptDate('Plan ticket for', row.t.planned, (v) => s.patchTicket(row.t.file, { planned: v }))
-            else promptDate('Due date', row.item.due, (v) => s.patchItem('tasks', row.id, { due: v || undefined }))
+            else promptDate('Due date', row.item.due, (v) => s.patchItem(row.list, row.id, { due: v || undefined }))
         },
-        '!': () => row?.kind === 'task' && void s.patchItem('tasks', row.id, { pri: !row.item.pri }),
+        '!': () => row?.kind === 'item' && row.list !== 'routine' && void s.patchItem(row.list, row.id, { pri: !row.item.pri }),
+        n: () => document.getElementById('f-today-notes')?.focus(),
         a: () => s.setModal({ type: 'add', kind: 'task', due: t }),
     })
 
-    const triageCount = (['tasks', 'learn', 'questions'] as const).reduce(
-        (n, k) => n + itemsOf(s.lists[k]).filter((l) => !l.item.done && !l.item.due && !l.item.later).length,
-        0
-    )
     const todayLog = s.dailies[t]?.log ?? []
     const clocked = todayLog.reduce((sum, l) => sum + Number(l.match(/^- \d\d:\d\d–\d\d:\d\d \((\d+)m\)/)?.[1] ?? 0), 0)
     const prevDate = s.dailyDates.find((d) => d < t)
     const prev = prevDate ? s.dailies[prevDate] : undefined
+    const triageCount = (['tasks', 'learn', 'questions'] as const).reduce(
+        (n, k) => n + itemsOf(s.lists[k]).filter((l) => !l.item.done && !l.item.due && !l.item.later).length,
+        0
+    )
 
     const stale = s.tickets
         .filter((tk) => tk.status !== 'done' && daysBetween(tk.updated, t) >= 4)
@@ -109,50 +115,43 @@ export function TodayView() {
 
     const resurface = (['questions', 'learn', 'ideas'] as const)
         .map((k) => {
-            const open = itemsOf(s.lists[k]).filter((l) => !l.item.done)
+            const open = itemsOf(s.lists[k]).filter((l) => !l.item.done && !l.item.due)
             return open.length ? { k, item: open[daySeed(t + k) % open.length].item } : null
         })
         .filter((x) => x !== null)
 
     return (
-        <div className="page">
+        <div className="page today">
             <PageHeader title="Today" sub={fmtDate(t) + ' · ' + new Date().toLocaleDateString(undefined, { day: 'numeric', month: 'long' })}>
                 {triageCount > 0 && <Chip tone="warn">{triageCount} to triage</Chip>}
                 {clocked > 0 && <Chip tone="accent">⏱ {fmtMins(clocked)} clocked</Chip>}
             </PageHeader>
-            <div className="split">
-                <div className="main">
-                    {focusCount === 0 && (
+
+            <div className="today-cols">
+                {/* ---- work ------------------------------------------------ */}
+                <div className="col">
+                    <h2 className="col-title">Work</h2>
+                    {rows.length === 0 && (
                         <Empty>
-                            Nothing in focus. Press <kbd>a</kbd> to add a task, or plan a ticket with <kbd>t</kbd> in the Tickets view.
+                            Nothing due today. Press <kbd>a</kbd> to add a task, or plan a ticket with <kbd>t</kbd>.
                         </Empty>
                     )}
                     {rows.map((r, i) => {
-                        const rolled = r.date < t
-                        if (r.kind === 'routine') {
-                            const done = r.item.completed === t
-                            const working = s.active?.kind === 'routine' && s.active.ref === r.item.text
-                            return (
-                                <div key={r.key}>
-                                    {r === routineRows[0] && (
-                                        <h3 className="group">
-                                            Daily routine{' '}
-                                            <span className="muted">
-                                                · {routineDone}/{routineRows.length}
-                                            </span>
-                                        </h3>
-                                    )}
-                                    <Row selected={i === cur} working={working} onClick={() => setC(i)} onDoubleClick={() => void s.toggleItem('routine', r.id)} type="routine">
-                                        <TypeIcon kind="routine" />
-                                        <span className={`check${done ? ' on' : ''}`} onClick={() => void s.toggleItem('routine', r.id)} />
-                                        <span className={`title${done ? ' done' : ''}`}>
-                                            <Rich text={r.item.text} />
+                        const sec = sectionOf(r)
+                        const head =
+                            firstOf(sec) === r ? (
+                                <h3 className="group">
+                                    {SECTION_TITLE[sec]}
+                                    {sec === 'routine' && (
+                                        <span className="muted">
+                                            {' '}
+                                            · {routineDone}/{routineRows.length}
                                         </span>
-                                        {working && s.active && <Elapsed start={s.active.start} />}
-                                    </Row>
-                                </div>
-                            )
-                        }
+                                    )}
+                                </h3>
+                            ) : null
+                        const rolled = r.date < t
+
                         if (r.kind === 'ticket') {
                             const subs = itemsOf(r.t.subtasks)
                             const working = s.active?.kind === 'ticket' && s.active.ref === r.t.file
@@ -167,51 +166,62 @@ export function TodayView() {
                                 .join(' · ')
                             return (
                                 <div key={r.key}>
-                                {r === firstFocus && routineRows.length > 0 && <h3 className="group">Focus</h3>}
-                                {r === firstOther && <h3 className="group">Other open tickets</h3>}
-                                <Row selected={i === cur} working={working} onClick={() => setC(i)} onDoubleClick={() => s.setOpenTicket(r.t.file)} type="ticket">
-                                    <TypeIcon kind="ticket" />
-                                    {r.t.key && <span className="key">{r.t.key}</span>}
-                                    <span className="title-block tight">
-                                        <span className="title">{r.t.title}</span>
-                                        {detail && <span className="note-preview">{detail}</span>}
-                                    </span>
-                                    <Chip tone={`s-${r.t.status}`}>{r.t.status}</Chip>
-                                    {working && s.active && <Elapsed start={s.active.start} />}
-                                    {rolled && <Chip tone="warn">from {fmtDate(r.date)}</Chip>}
-                                    {subs.length > 0 && (
-                                        <Chip>
-                                            ☑ {subs.filter((x) => x.item.done).length}/{subs.length}
-                                        </Chip>
-                                    )}
-                                    {r.t.spent > 0 && <Chip>⏱ {fmtMins(r.t.spent)}</Chip>}
-                                    {r.t.planned && r.t.planned > t && <Chip tone="accent">plan {fmtDate(r.t.planned)}</Chip>}
-                                </Row>
+                                    {head}
+                                    <Row selected={i === cur} working={working} type="ticket" onClick={() => setC(i)} onDoubleClick={() => s.setOpenTicket(r.t.file)}>
+                                        <TypeIcon kind="ticket" />
+                                        {r.t.key && <span className="key">{r.t.key}</span>}
+                                        <span className="title-block tight">
+                                            <span className="title">{r.t.title}</span>
+                                            {detail && <span className="note-preview">{detail}</span>}
+                                        </span>
+                                        <Chip tone={`s-${r.t.status}`}>{r.t.status}</Chip>
+                                        {working && s.active && <Elapsed start={s.active.start} />}
+                                        {rolled && <Chip tone="warn">from {fmtDate(r.date)}</Chip>}
+                                        {subs.length > 0 && (
+                                            <Chip>
+                                                ☑ {subs.filter((x) => x.item.done).length}/{subs.length}
+                                            </Chip>
+                                        )}
+                                        {r.t.spent > 0 && <Chip>⏱ {fmtMins(r.t.spent)}</Chip>}
+                                    </Row>
                                 </div>
                             )
                         }
-                        const working = s.active?.kind === 'tasks' && s.active.ref === r.item.text
+
+                        const done = r.list === 'routine' ? r.item.completed === t : r.item.done
+                        const working = s.active?.kind === r.list && s.active.ref === r.item.text
+                        const iconKind = r.list === 'tasks' ? 'task' : r.list === 'routine' ? 'routine' : r.list === 'questions' ? 'question' : 'learn'
                         return (
                             <div key={r.key}>
-                            {r === firstFocus && routineRows.length > 0 && <h3 className="group">Focus</h3>}
-                            <Row selected={i === cur} working={working} onClick={() => setC(i)} onDoubleClick={() => void s.toggleItem('tasks', r.id)} type="task">
-                                <TypeIcon kind="task" />
-                                <span className="check" onClick={() => void s.toggleItem('tasks', r.id)} />
-                                <span className="title">
-                                    {r.item.pri && <span className="pri">!</span>}
-                                    <Rich text={r.item.text} />
-                                </span>
-                                {working && s.active && <Elapsed start={s.active.start} />}
-                                {rolled && <Chip tone="warn">due {fmtDate(r.date)}</Chip>}
-                            </Row>
+                                {head}
+                                <Row selected={i === cur} working={working} type={iconKind} onClick={() => setC(i)} onDoubleClick={() => s.openItemById(r.list, r.id)}>
+                                    <TypeIcon kind={iconKind} />
+                                    <span className={`check${done ? ' on' : ''}`} onClick={() => void s.toggleItem(r.list, r.id)} />
+                                    <span className={`title${done ? ' done' : ''}`}>
+                                        {r.item.pri && <span className="pri">!</span>}
+                                        <Rich text={r.item.text} />
+                                    </span>
+                                    {working && s.active && <Elapsed start={s.active.start} />}
+                                    {rolled && r.list !== 'routine' && <Chip tone="warn">due {fmtDate(r.date)}</Chip>}
+                                </Row>
                             </div>
                         )
                     })}
                 </div>
 
-                <aside className="aside">
+                {/* ---- notes ----------------------------------------------- */}
+                <div className="col">
+                    <h2 className="col-title">
+                        Notes <span className="muted">(n)</span>
+                    </h2>
+                    <TodayNotes date={t} />
+                </div>
+
+                {/* ---- log ------------------------------------------------- */}
+                <div className="col">
+                    <h2 className="col-title">Log</h2>
                     <section>
-                        <h3>Today's log</h3>
+                        <h3>Today</h3>
                         {todayLog.length === 0 ? <p className="muted">Nothing logged yet.</p> : <LogList lines={todayLog} />}
                     </section>
 
@@ -244,9 +254,49 @@ export function TodayView() {
                             ))}
                         </section>
                     )}
-                </aside>
+                </div>
             </div>
         </div>
+    )
+}
+
+/** Today's daily note, editable in place and autosaved. */
+function TodayNotes({ date }: { date: string }) {
+    const notes = useStore((s) => s.dailies[date]?.notes ?? '')
+    const setDailyNotes = useStore((s) => s.setDailyNotes)
+    const [text, setText] = useState(notes)
+    const [editing, setEditing] = useState(false)
+    const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+
+    useEffect(() => {
+        if (!editing) setText(notes)
+    }, [notes, editing])
+
+    const flush = (v: string) => {
+        clearTimeout(timer.current)
+        if (v !== notes) void setDailyNotes(date, v)
+    }
+    return (
+        <textarea
+            id="f-today-notes"
+            className="daily-area today-notes"
+            placeholder="What did I do, decide, or learn today? Markdown; [[ABC-123]] links a ticket. Saved to today's daily note."
+            value={text}
+            onFocus={() => setEditing(true)}
+            onBlur={() => {
+                setEditing(false)
+                flush(text)
+            }}
+            onChange={(e) => {
+                setText(e.target.value)
+                clearTimeout(timer.current)
+                const v = e.target.value
+                timer.current = setTimeout(() => flush(v), 600)
+            }}
+            onKeyDown={(e) => {
+                if (e.key === 'Escape') e.currentTarget.blur()
+            }}
+        />
     )
 }
 

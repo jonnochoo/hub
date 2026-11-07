@@ -202,7 +202,7 @@ export const SHORTCUTS: { group: string; keys: [string, string][] }[] = [
             ['n', '(on an item page) edit notes'],
             ['d', 'Set due / plan date  (today, tom, mon, +3, +2w, 25 dec)'],
             ['t', 'Plan for today'],
-            ['l', 'Park as later (tasks, learn, questions). No date + not later = Triage'],
+            ['l', 'Park as Later (tasks, learn, questions). Triage is the start state only'],
             ['p', 'Postpone a day'],
             ['!', 'Toggle priority'],
             ['o', 'Open first link'],

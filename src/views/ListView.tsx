@@ -22,9 +22,9 @@ const EMPTY: Record<ListKind, string> = {
 export const TRIAGED: ListKind[] = ['tasks', 'learn', 'questions']
 type Group = 'triage' | 'due' | 'later' | 'done'
 const GROUPS: { id: Group; label: string; hint?: string }[] = [
-    { id: 'triage', label: 'Triage', hint: 'no date yet: d to set one, l for later' },
-    { id: 'due', label: 'Due' },
+    { id: 'triage', label: 'Triage', hint: 'decide: l for later, or d to give it a date' },
     { id: 'later', label: 'Later' },
+    { id: 'due', label: 'Due date' },
     { id: 'done', label: 'Done' },
 ]
 export const groupOf = (l: ItemLine): Group => (l.item.done ? 'done' : l.item.due ? 'due' : l.item.later ? 'later' : 'triage')
@@ -64,7 +64,7 @@ function ItemList({ kind }: { kind: ListKind }) {
         ...nav,
         Enter: () => openRow(row),
         e: () => openRow(row),
-        l: () => triaged && row && void s.patchItem(kind, row.id, { later: !row.item.later, ...(row.item.later ? {} : { due: undefined }) }),
+        l: () => triaged && row && !row.item.done && void s.patchItem(kind, row.id, { later: true }),
         c: () => row && void s.toggleItem(kind, row.id),
         x: () => row && void s.toggleItem(kind, row.id),
         s: () => row && void s.startWork({ kind, ref: row.item.text, label: row.item.text }),
@@ -112,8 +112,7 @@ function ItemList({ kind }: { kind: ListKind }) {
                             </span>
                             {working && s.active && <Elapsed start={s.active.start} />}
                             {kind !== 'routine' && l.item.due && <Chip tone={overdue ? 'warn' : l.item.due === t ? 'accent' : undefined}>{fmtDate(l.item.due)}</Chip>}
-                            {l.item.later && !l.item.done && <Chip>later</Chip>}
-                        </Row>
+                                        </Row>
                     </div>
                 )
             })}
@@ -140,9 +139,12 @@ function ItemDetail({ kind, index }: { kind: ListKind; index: number }) {
         Escape: back,
         h: back,
         e: () => document.getElementById('f-text')?.focus(),
-        d: () => document.getElementById('f-due')?.focus(),
+        d: () => {
+            if (!it.due) patch({ due: t })
+            setTimeout(() => document.getElementById('f-due')?.focus(), 50)
+        },
         n: () => document.getElementById('f-notes-view')?.click(),
-        l: () => triaged && patch(it.later ? { later: false } : { later: true }),
+        l: () => triaged && patch({ later: true }),
         t: () => patch({ due: t }),
         p: () => patch({ due: addDays(it.due && it.due > t ? it.due : t, 1) }),
         '!': () => patch({ pri: !it.pri }),
@@ -173,25 +175,23 @@ function ItemDetail({ kind, index }: { kind: ListKind; index: number }) {
                     <div className="ifield">
                         <span className="ifield-label">When</span>
                         <div className="seg">
-                            <button className={`status-btn triage${mode === 'triage' ? ' on' : ''}`} onClick={() => patch({ due: undefined, later: false })}>
-                                Triage
-                            </button>
+                            {mode === 'triage' && <span className="status-btn triage on">Triage: choose one</span>}
                             <button className={`status-btn${mode === 'later' ? ' on' : ''}`} onClick={() => patch({ later: true })}>
                                 Later <kbd>l</kbd>
                             </button>
-                            <button className={`status-btn${mode === 'due' ? ' on' : ''}`} onClick={() => patch({ due: t })}>
-                                Today <kbd>t</kbd>
+                            <button className={`status-btn${mode === 'due' ? ' on' : ''}`} onClick={() => !it.due && patch({ due: t })}>
+                                Due date <kbd>d</kbd>
                             </button>
                         </div>
                     </div>
                 )}
 
-                {!isRoutine && (
+                {!isRoutine && (!triaged || mode === 'due') && (
                     <InlineField
                         id="f-due"
                         label="Due date (d)"
                         value={it.due ?? ''}
-                        placeholder="today, tom, mon, +3, +2w, 25 dec, 2026-12-01 · empty clears"
+                        placeholder="today, tom, mon, +3, +2w, 25 dec, 2026-12-01 · empty moves to Later"
                         onCommit={(v) => {
                             if (!v) return patch({ due: undefined })
                             const d = parseDate(v)

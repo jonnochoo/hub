@@ -223,6 +223,8 @@ export const useStore = create<State>((set, get) => {
                 // A date and "later" are mutually exclusive; neither means triage.
                 if (patch.due) next.later = undefined
                 if (patch.later) next.due = undefined
+                // Triage is only a starting state: clearing a date parks the item as Later.
+                if (['tasks', 'learn', 'questions'].includes(kind) && (it.due || it.later) && !next.due && !next.later) next.later = true
                 return next
             })
             await saveList(kind, lines)
