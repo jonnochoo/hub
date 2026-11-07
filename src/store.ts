@@ -86,7 +86,7 @@ interface State {
     toggleItem(kind: ListKind, id: string): Promise<void>
     removeItem(kind: ListKind, id: string): Promise<void>
 
-    addTicket(input: { key: string; title: string; url: string; planned: string }): Promise<string>
+    addTicket(input: { key: string; title: string; url: string; planned: string; later?: boolean }): Promise<string>
     patchTicket(file: string, patch: Partial<Ticket>): Promise<void>
     setStatus(file: string, status: Status): Promise<void>
     editSubtasks(file: string, fn: (lines: Line[]) => Line[]): Promise<void>
@@ -250,7 +250,7 @@ export const useStore = create<State>((set, get) => {
         },
 
         // ---- tickets --------------------------------------------------------
-        async addTicket({ key, title, url, planned }) {
+        async addTicket({ key, title, url, planned, later }) {
             let file = ticketFile(key, title)
             const existing = new Set(get().tickets.map((t) => t.file))
             for (let n = 2; existing.has(file); n++) file = file.replace(/(-\d+)?\.md$/, `-${n}.md`)
@@ -263,6 +263,7 @@ export const useStore = create<State>((set, get) => {
                 created: today(),
                 updated: today(),
                 planned,
+                later: !!later && !planned,
                 spent: 0,
                 subtasks: [],
                 notes: '',
@@ -275,7 +276,13 @@ export const useStore = create<State>((set, get) => {
 
         async patchTicket(file, patch) {
             const t = get().tickets.find((x) => x.file === file)
-            if (t) await saveTicket({ ...t, ...patch })
+            if (!t) return
+            const next = { ...t, ...patch }
+            // A date and "later" are mutually exclusive; triage is only a starting state.
+            if (patch.planned) next.later = false
+            if (patch.later) next.planned = ''
+            if ((t.planned || t.later) && !next.planned && !next.later) next.later = true
+            await saveTicket(next)
         },
 
         async setStatus(file, status) {
@@ -328,6 +335,11 @@ export const useStore = create<State>((set, get) => {
         // ---- timer ----------------------------------------------------------
         async startWork(a) {
             if (get().active) await get().stopWork()
+            if (a.kind === 'ticket') {
+                const tk = get().tickets.find((x) => x.file === a.ref)
+                // Clocking into a todo ticket starts it, so it lands on Today.
+                if (tk && tk.status === 'todo') await get().setStatus(tk.file, 'in-progress')
+            }
             const active: Active = { ...a, start: Date.now() }
             set({ active })
             await vault.write('.hub/active.json', JSON.stringify(active))
@@ -385,8 +397,8 @@ export function parseCapture(input: string): { text: string; due?: string; pri: 
     return { text: text.trim(), due, pri, later }
 }
 
-export function parseTicketInput(input: string): { key: string; title: string; url: string; planned: string } {
-    const { text, due } = parseCapture(input)
+export function parseTicketInput(input: string): { key: string; title: string; url: string; planned: string; later?: boolean } {
+    const { text, due, later } = parseCapture(input)
     let url = ''
     let rest = text.replace(/https?:\/\/\S+/, (u) => {
         url = u
@@ -405,7 +417,7 @@ export function parseTicketInput(input: string): { key: string; title: string; u
         .join(' ')
         .trim()
     if (!key && url) key = url.match(/([A-Z][A-Z0-9]+-\d+)/)?.[1] ?? ''
-    return { key, title: rest || key || 'Untitled', url, planned: due ?? '' }
+    return { key, title: rest || key || 'Untitled', url, planned: due ?? '', later }
 }
 
 export const isTicketActive = (a: Active | null, t: Ticket) => !!a && a.kind === 'ticket' && a.ref === t.file
@@ -443,7 +455,9 @@ folder and reloads when files change.
 ## Tickets
 
 Frontmatter: \`key\`, \`title\`, \`url\`, \`status\` (todo | in-progress | blocked | review | done),
-\`created\`, \`updated\`, \`planned\` (the day I intend to work on it), \`spent\` (minutes clocked).
+\`created\`, \`updated\`, \`planned\` (the day I intend to work on it), \`later: true\` (parked), \`spent\` (minutes clocked).
+Planning (\`planned\` / \`later\`) only applies to \`todo\` tickets; with neither set a todo ticket is in triage.
+Tickets that are in-progress, blocked or review always show on Today until done.
 Body: \`## Subtasks\` checklist, then \`## Notes\`.
 
 ## Daily log lines

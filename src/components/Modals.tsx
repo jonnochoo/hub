@@ -7,7 +7,7 @@ import { setTheme, THEMES, getTheme } from '../theme'
 const KINDS: { kind: AddKind; label: string; hint: string }[] = [
     { kind: 'task', label: 'Task', hint: 'Reply to Bob ^tom !   (^date or ^later; no date = triage; ! = priority)' },
     { kind: 'routine', label: 'Daily', hint: 'Check PRs and email   (shows on Today every day)' },
-    { kind: 'ticket', label: 'Ticket', hint: 'ABC-123 Fix login https://jira…/ABC-123   (^date = plan for)' },
+    { kind: 'ticket', label: 'Ticket', hint: 'ABC-123 Fix login https://jira…/ABC-123   (^date or ^later; none = triage)' },
     { kind: 'learn', label: 'Learn', hint: 'Rust lifetimes, https://…' },
     { kind: 'question', label: 'Question', hint: 'Why does the cache miss on cold start?' },
     { kind: 'idea', label: 'Idea', hint: 'Someday: …' },
@@ -215,6 +215,7 @@ export const SHORTCUTS: { group: string; keys: [string, string][] }[] = [
         group: 'Tickets',
         keys: [
             ['1 – 5', 'Status: todo / in-progress / blocked / review / done'],
+            ['l / d / t', 'Todo ticket: Later, plan a date, plan today (new tickets start in Triage). Other statuses are always on Today'],
             ['Enter', 'Open ticket'],
             ['Esc', 'Back to list'],
             ['x', '(in a ticket) tick subtask'],

@@ -1,8 +1,8 @@
 import { useMemo } from 'react'
 import { useStore } from '../store'
-import { addDays, fmtDate, fmtMins, today } from '../lib/dates'
+import { addDays, fmtDate, fmtMins, parseDate, today } from '../lib/dates'
 import { itemsOf, mapItem, newItem } from '../lib/md'
-import { STATUSES, ticketLabel, type Status, type Ticket } from '../lib/model'
+import { STATUSES, ticketLabel, ticketWhen, type Status, type Ticket, type When } from '../lib/model'
 import { useHotkeys } from '../lib/hotkeys'
 import { promptDate, promptText } from '../lib/prompts'
 import { openUrl } from '../lib/fs'
@@ -10,6 +10,15 @@ import { AddInput, Chip, Empty, InlineField, NotesField, PageHeader, Row, useCur
 import { Elapsed } from '../components/Elapsed'
 
 const ORDER: Status[] = ['in-progress', 'blocked', 'review', 'todo', 'done']
+type Group = When | 'active' | 'done'
+const GROUPS: { id: Group; label: string; hint?: string }[] = [
+    { id: 'active', label: 'Active', hint: 'in progress, blocked or in review: always on Today' },
+    { id: 'triage', label: 'Triage', hint: 'todo: decide with l for later, or d to plan a date' },
+    { id: 'later', label: 'Later' },
+    { id: 'date', label: 'Planned' },
+    { id: 'done', label: 'Done' },
+]
+const groupOf = (t: Ticket): Group => (t.status === 'done' ? 'done' : t.status !== 'todo' ? 'active' : ticketWhen(t))
 
 export const TicketsView = () => <TicketList />
 
@@ -21,22 +30,29 @@ function TicketList() {
     const list = useMemo(() => {
         return s.tickets
             .filter((x) => (s.showDone || x.status !== 'done') && (!q || `${x.key} ${x.title} ${x.notes}`.toLowerCase().includes(q)))
-            .sort((a, b) => ORDER.indexOf(a.status) - ORDER.indexOf(b.status) || a.key.localeCompare(b.key, undefined, { numeric: true }))
+            .sort(
+                (a, b) =>
+                    GROUPS.findIndex((g) => g.id === groupOf(a)) - GROUPS.findIndex((g) => g.id === groupOf(b)) ||
+                    (a.planned || '9').localeCompare(b.planned || '9') ||
+                    ORDER.indexOf(a.status) - ORDER.indexOf(b.status) ||
+                    a.key.localeCompare(b.key, undefined, { numeric: true })
+            )
     }, [s.tickets, s.showDone, q])
 
     const { cur, setC, nav } = useCursor(list.length)
     const tk = list[cur]
     const setStatus = (st: Status) => tk && void s.setStatus(tk.file, st)
+    const canPlan = (x: Ticket) => x.status === 'todo' || (s.toast('Only todo tickets are planned; others are always on Today'), false)
 
     useHotkeys({
         ...nav,
         Enter: () => tk && s.setOpenTicket(tk.file),
-        l: () => tk && s.setOpenTicket(tk.file),
+        l: () => tk && canPlan(tk) && void s.patchTicket(tk.file, { later: true }),
         o: () => tk?.url && void openUrl(tk.url),
         s: () => tk && void s.startWork({ kind: 'ticket', ref: tk.file, label: ticketLabel(tk) }),
-        t: () => tk && void s.patchTicket(tk.file, { planned: t }).then(() => s.toast('Planned for today')),
-        p: () => tk && void s.patchTicket(tk.file, { planned: addDays(tk.planned > t ? tk.planned : t, 1) }),
-        d: () => tk && promptDate('Plan ticket for', tk.planned, (v) => s.patchTicket(tk.file, { planned: v })),
+        t: () => tk && canPlan(tk) && void s.patchTicket(tk.file, { planned: t }).then(() => s.toast('Planned for today')),
+        p: () => tk && canPlan(tk) && void s.patchTicket(tk.file, { planned: addDays(tk.planned > t ? tk.planned : t, 1) }),
+        d: () => tk && canPlan(tk) && promptDate('Plan ticket for', tk.planned, (v) => s.patchTicket(tk.file, { planned: v })),
         c: () => setStatus('done'),
         H: s.toggleShowDone,
         '#': () => {
@@ -46,7 +62,7 @@ function TicketList() {
         a: () => s.setModal({ type: 'add', kind: 'ticket' }),
     })
 
-    let lastStatus: Status | null = null
+    let lastGroup: Group | null = null
     return (
         <div className="page">
             <PageHeader title="Tickets" sub={`${list.length} shown`} search={{ value: s.search, onChange: s.setSearch }}>
@@ -58,19 +74,25 @@ function TicketList() {
                 </Empty>
             )}
             {list.map((x, i) => {
-                const head = x.status !== lastStatus ? x.status : null
-                lastStatus = x.status
+                const g = groupOf(x)
+                const head = g !== lastGroup ? GROUPS.find((y) => y.id === g)! : null
+                lastGroup = g
                 const subs = itemsOf(x.subtasks)
                 const working = s.active?.kind === 'ticket' && s.active.ref === x.file
                 return (
                     <div key={x.file}>
-                        {head && <h3 className="group">{head}</h3>}
+                        {head && (
+                            <h3 className="group">
+                                {head.label} {head.hint && <span className="muted"> · {head.hint}</span>}
+                            </h3>
+                        )}
                         <Row selected={i === cur} working={working} onClick={() => setC(i)} onDoubleClick={() => s.setOpenTicket(x.file)}>
                             <span className={`dot ${x.status}`} />
                             {x.key && <span className="key">{x.key}</span>}
                             <span className="title">{x.title}</span>
+                            <Chip tone={`s-${x.status}`}>{x.status}</Chip>
                             {working && s.active && <Elapsed start={s.active.start} />}
-                            {x.planned && <Chip tone={x.planned < t ? 'warn' : 'accent'}>plan {fmtDate(x.planned)}</Chip>}
+                            {x.planned && <Chip tone={x.planned < t ? 'warn' : 'accent'}>{fmtDate(x.planned)}</Chip>}
                             {subs.length > 0 && (
                                 <Chip>
                                     {subs.filter((y) => y.item.done).length}/{subs.length}
@@ -93,6 +115,8 @@ export function TicketDetail({ file }: { file: string }) {
     const sub = subs[cur]
     const t = today()
     const working = s.active?.kind === 'ticket' && s.active.ref === tk.file
+    const when = ticketWhen(tk)
+    const canPlan = () => tk.status === 'todo' || (s.toast('Only todo tickets are planned; others are always on Today'), false)
 
     useHotkeys({
         ...nav,
@@ -105,11 +129,17 @@ export function TicketDetail({ file }: { file: string }) {
         '#': () => sub && void s.editSubtasks(file, (ls) => ls.filter((l) => l.id !== sub.id)),
         e: () => document.getElementById('f-title')?.focus(),
         u: () => document.getElementById('f-url')?.focus(),
-        n: () => document.getElementById('f-notes-view')?.click(),
+        n: () => document.getElementById('notes-detail-view')?.click(),
         o: () => tk.url && void openUrl(tk.url),
         s: () => (working ? void s.stopWork() : void s.startWork({ kind: 'ticket', ref: tk.file, label: ticketLabel(tk) })),
-        t: () => void s.patchTicket(file, { planned: t }).then(() => s.toast('Planned for today')),
-        d: () => promptDate('Plan ticket for', tk.planned, (v) => s.patchTicket(file, { planned: v })),
+        t: () => canPlan() && void s.patchTicket(file, { planned: t }).then(() => s.toast('Planned for today')),
+        l: () => canPlan() && void s.patchTicket(file, { later: true }),
+        p: () => canPlan() && void s.patchTicket(file, { planned: addDays(tk.planned > t ? tk.planned : t, 1) }),
+        d: () => {
+            if (!canPlan()) return
+            if (!tk.planned) void s.patchTicket(file, { planned: t })
+            setTimeout(() => document.getElementById('f-plan')?.focus(), 50)
+        },
         D: () => {
             if (confirm(`Delete ${ticketLabel(tk)}?`)) void s.removeTicket(file)
         },
@@ -142,15 +172,45 @@ export function TicketDetail({ file }: { file: string }) {
                         ))}
                     </div>
                 </div>
+                {tk.status !== 'todo' ? (
+                    <div className="ifield">
+                        <span className="ifield-label">When</span>
+                        <span className="muted">Always on Today while {tk.status}. Planning applies to todo tickets.</span>
+                        {tk.spent > 0 && <Chip>{fmtMins(tk.spent)} clocked</Chip>}
+                    </div>
+                ) : (
+                    <>
                 <div className="ifield">
-                    <span className="ifield-label">Planned (d / t)</span>
-                    <div className="statuses">
-                        <button className="btn" onClick={() => promptDate('Plan ticket for', tk.planned, (v) => s.patchTicket(file, { planned: v }))}>
-                            {tk.planned ? fmtDate(tk.planned) : 'Not planned'}
+                    <span className="ifield-label">When</span>
+                    <div className="seg">
+                        {when === 'triage' && <span className="status-btn triage on">Triage: choose one</span>}
+                        <button className={`status-btn${when === 'later' ? ' on' : ''}`} onClick={() => void s.patchTicket(file, { later: true })}>
+                            Later <kbd>l</kbd>
+                        </button>
+                        <button className={`status-btn${when === 'date' ? ' on' : ''}`} onClick={() => !tk.planned && void s.patchTicket(file, { planned: t })}>
+                            Plan for a date <kbd>d</kbd>
                         </button>
                         {tk.spent > 0 && <Chip>{fmtMins(tk.spent)} clocked</Chip>}
                     </div>
                 </div>
+                {when === 'date' && (
+                    <InlineField
+                        id="f-plan"
+                        label="Planned for"
+                        value={tk.planned}
+                        placeholder="today, tom, mon, +3, 25 dec · empty moves to Later"
+                        onCommit={(v) => {
+                            if (!v) return void s.patchTicket(file, { planned: '' })
+                            const d = parseDate(v)
+                            if (d) void s.patchTicket(file, { planned: d })
+                            else s.toast(`Cannot read "${v}" as a date`)
+                        }}
+                    >
+                        <Chip tone={tk.planned < t ? 'warn' : 'accent'}>{fmtDate(tk.planned)}</Chip>
+                    </InlineField>
+                )}
+                    </>
+                )}
             </div>
 
             <h3 className="group">Subtasks</h3>
@@ -171,7 +231,7 @@ export function TicketDetail({ file }: { file: string }) {
             <h3 className="group">
                 Notes <span className="muted">(n to edit, markdown)</span>
             </h3>
-            <NotesField value={tk.notes} placeholder="No notes. Click or press n to add some." onCommit={(v) => void s.patchTicket(file, { notes: v })} />
+            <NotesField id="notes-detail" value={tk.notes} placeholder="No notes. Click or press n to add some." onCommit={(v) => void s.patchTicket(file, { notes: v })} />
             <p className="muted foot">
                 <kbd>1</kbd>–<kbd>5</kbd> status · <kbd>s</kbd> clock in/out · <kbd>Esc</kbd> back · <kbd>?</kbd> all keys
             </p>

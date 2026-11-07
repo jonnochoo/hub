@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo } from 'react'
 import { useStore } from '../store'
 import { addDays, daysBetween, fmtDate, fmtMins, today } from '../lib/dates'
 import { itemsOf, type Item } from '../lib/md'
 import { ticketLabel, type ListKind, type Ticket } from '../lib/model'
 import { useHotkeys } from '../lib/hotkeys'
 import { promptDate } from '../lib/prompts'
-import { Chip, Empty, PageHeader, Rich, Row, TypeIcon, useCursor } from '../components/ui'
+import { Chip, Empty, NotesField, PageHeader, Rich, Row, TypeIcon, useCursor } from '../components/ui'
 import { Elapsed } from '../components/Elapsed'
 
 type Section = 'routine' | 'focus' | 'questions' | 'learn'
@@ -42,7 +42,7 @@ export function TodayView() {
         const focus: TRow[] = []
         for (const tk of s.tickets) {
             if (tk.status === 'done') continue
-            if (tk.status === 'in-progress' || (tk.planned && tk.planned <= t)) focus.push({ kind: 'ticket', key: tk.file, t: tk, date: tk.planned || t })
+            if (tk.status !== 'todo' || (tk.planned && tk.planned <= t)) focus.push({ kind: 'ticket', key: tk.file, t: tk, date: tk.planned || t })
         }
         for (const l of s.lists.tasks)
             if (l.item && !l.item.done && l.item.due && l.item.due <= t) focus.push({ kind: 'item', list: 'tasks', key: l.id, id: l.id, item: l.item, date: l.item.due })
@@ -84,6 +84,7 @@ export function TodayView() {
         },
         p: () => {
             if (!row || (row.kind === 'item' && row.list === 'routine')) return
+            if (row.kind === 'ticket' && row.t.status !== 'todo') return s.toast('Only todo tickets are planned; this one is always on Today')
             const next = addDays(row.date > t ? row.date : t, 1)
             if (row.kind === 'ticket') void s.patchTicket(row.t.file, { planned: next })
             else void s.patchItem(row.list, row.id, { due: next })
@@ -91,11 +92,12 @@ export function TodayView() {
         },
         d: () => {
             if (!row || (row.kind === 'item' && row.list === 'routine')) return
+            if (row.kind === 'ticket' && row.t.status !== 'todo') return s.toast('Only todo tickets are planned; this one is always on Today')
             if (row.kind === 'ticket') promptDate('Plan ticket for', row.t.planned, (v) => s.patchTicket(row.t.file, { planned: v }))
             else promptDate('Due date', row.item.due, (v) => s.patchItem(row.list, row.id, { due: v || undefined }))
         },
         '!': () => row?.kind === 'item' && row.list !== 'routine' && void s.patchItem(row.list, row.id, { pri: !row.item.pri }),
-        n: () => document.getElementById('f-today-notes')?.focus(),
+        n: () => document.getElementById('notes-today-view')?.click(),
         a: () => s.setModal({ type: 'add', kind: 'task', due: t }),
     })
 
@@ -103,10 +105,9 @@ export function TodayView() {
     const clocked = todayLog.reduce((sum, l) => sum + Number(l.match(/^- \d\d:\d\d–\d\d:\d\d \((\d+)m\)/)?.[1] ?? 0), 0)
     const prevDate = s.dailyDates.find((d) => d < t)
     const prev = prevDate ? s.dailies[prevDate] : undefined
-    const triageCount = (['tasks', 'learn', 'questions'] as const).reduce(
-        (n, k) => n + itemsOf(s.lists[k]).filter((l) => !l.item.done && !l.item.due && !l.item.later).length,
-        0
-    )
+    const triageCount =
+        (['tasks', 'learn', 'questions'] as const).reduce((n, k) => n + itemsOf(s.lists[k]).filter((l) => !l.item.done && !l.item.due && !l.item.later).length, 0) +
+        s.tickets.filter((tk) => tk.status === 'todo' && !tk.planned && !tk.later).length
 
     const stale = s.tickets
         .filter((tk) => tk.status !== 'done' && daysBetween(tk.updated, t) >= 4)
@@ -260,42 +261,17 @@ export function TodayView() {
     )
 }
 
-/** Today's daily note, editable in place and autosaved. */
+/** Today's daily note: markdown when idle, click (or n) to edit. */
 function TodayNotes({ date }: { date: string }) {
     const notes = useStore((s) => s.dailies[date]?.notes ?? '')
     const setDailyNotes = useStore((s) => s.setDailyNotes)
-    const [text, setText] = useState(notes)
-    const [editing, setEditing] = useState(false)
-    const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
-
-    useEffect(() => {
-        if (!editing) setText(notes)
-    }, [notes, editing])
-
-    const flush = (v: string) => {
-        clearTimeout(timer.current)
-        if (v !== notes) void setDailyNotes(date, v)
-    }
     return (
-        <textarea
-            id="f-today-notes"
-            className="daily-area today-notes"
-            placeholder="What did I do, decide, or learn today? Markdown; [[ABC-123]] links a ticket. Saved to today's daily note."
-            value={text}
-            onFocus={() => setEditing(true)}
-            onBlur={() => {
-                setEditing(false)
-                flush(text)
-            }}
-            onChange={(e) => {
-                setText(e.target.value)
-                clearTimeout(timer.current)
-                const v = e.target.value
-                timer.current = setTimeout(() => flush(v), 600)
-            }}
-            onKeyDown={(e) => {
-                if (e.key === 'Escape') e.currentTarget.blur()
-            }}
+        <NotesField
+            id="notes-today"
+            fill
+            value={notes}
+            placeholder="What did I do, decide, or learn today? Click or press n to write. Markdown; [[ABC-123]] links a ticket. Saved to today's daily note."
+            onCommit={(v) => void setDailyNotes(date, v)}
         />
     )
 }

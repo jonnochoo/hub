@@ -12,14 +12,15 @@ export interface Ticket {
     status: Status
     created: string
     updated: string
-    planned: string // "today" pin: the day I intend to work on it ('' = unplanned)
+    planned: string // the day I intend to work on it ('' = none)
+    later: boolean // parked. No planned date and not later = triage
     spent: number // minutes clocked
     subtasks: Line[]
     notes: string
     extra: Record<string, string> // unknown frontmatter, preserved for agents/humans
 }
 
-const KNOWN = ['key', 'title', 'url', 'status', 'created', 'updated', 'planned', 'spent']
+const KNOWN = ['key', 'title', 'url', 'status', 'created', 'updated', 'planned', 'later', 'spent']
 
 export function parseTicket(file: string, src: string): Ticket {
     const { fm, body } = parseDoc(src)
@@ -36,7 +37,8 @@ export function parseTicket(file: string, src: string): Ticket {
         status,
         created: fm.created || today(),
         updated: fm.updated || fm.created || today(),
-        planned: fm.planned ?? '',
+        planned: /^\d{4}-\d{2}-\d{2}$/.test(fm.planned ?? '') ? fm.planned : '',
+        later: fm.later === 'true' || fm.planned === 'later',
         spent: Number(fm.spent) || 0,
         subtasks: parseList(sub.lines.join('\n')),
         notes: stripHeadings(sub.rest),
@@ -53,6 +55,7 @@ export function serializeTicket(t: Ticket): string {
         created: t.created,
         updated: t.updated,
         planned: t.planned,
+        later: t.later ? 'true' : '',
         spent: t.spent ? String(t.spent) : '',
         ...t.extra,
     }
@@ -109,3 +112,6 @@ export const LIST_TITLE: Record<ListKind, string> = {
     questions: 'Questions',
     ideas: 'Future & ideas',
 }
+
+export type When = 'triage' | 'later' | 'date'
+export const ticketWhen = (t: Ticket): When => (t.planned ? 'date' : t.later ? 'later' : 'triage')

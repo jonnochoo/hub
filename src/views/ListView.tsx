@@ -138,7 +138,7 @@ export function ItemDetail({ kind, index }: { kind: ListKind; index: number }) {
             if (!it.due) patch({ due: t })
             setTimeout(() => document.getElementById('f-due')?.focus(), 50)
         },
-        n: () => document.getElementById('f-notes-view')?.click(),
+        n: () => document.getElementById('notes-detail-view')?.click(),
         l: () => triaged && patch({ later: true }),
         t: () => patch({ due: t }),
         p: () => patch({ due: addDays(it.due && it.due > t ? it.due : t, 1) }),
@@ -217,7 +217,7 @@ export function ItemDetail({ kind, index }: { kind: ListKind; index: number }) {
                 {kind === 'questions' ? 'Answer / notes' : 'Notes'} <span className="muted">(n to edit)</span>
             </h3>
             <NotesField
-                markdown={false}
+                id="notes-detail"
                 value={it.notes.join('\n')}
                 placeholder={kind === 'questions' ? 'Not answered yet. Click or press n to write what you find.' : 'No notes. Click or press n to add some.'}
                 onCommit={(v) => patch({ notes: v ? v.split('\n') : [] })}

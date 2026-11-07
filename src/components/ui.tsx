@@ -224,17 +224,39 @@ export function TypeIcon({ kind }: { kind: 'ticket' | 'task' | 'routine' | 'ques
     )
 }
 
-/** Markdown notes shown rendered; click (or press n) to edit in place, blur to save. */
+const mdComponents = {
+    // Never navigate the app window: open links in the browser, and don't enter edit mode.
+    a: ({ href, children }: { href?: string; children?: ReactNode }) => (
+        <a
+            href={href}
+            onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                if (href) void openUrl(href)
+            }}
+        >
+            {children}
+        </a>
+    ),
+}
+
+/**
+ * Markdown notes: rendered when idle, a textarea while editing. Click the text, or
+ * press the field's key (`n`) to edit; blur / Esc / Ctrl+Enter saves.
+ * Element ids are `${id}-view` and `${id}-edit` so a screen can target one field.
+ */
 export function NotesField({
+    id,
     value,
     placeholder,
     onCommit,
-    markdown = true,
+    fill,
 }: {
+    id: string
     value: string
     placeholder: string
     onCommit: (v: string) => void
-    markdown?: boolean
+    fill?: boolean
 }) {
     const [editing, setEditing] = useState(false)
     const [v, setV] = useState(value)
@@ -248,15 +270,11 @@ export function NotesField({
 
     if (!editing)
         return (
-            <div id="f-notes-view" className="notes-view" onClick={() => setEditing(true)}>
+            <div id={`${id}-view`} className={`notes-view${fill ? ' fill' : ''}`} onClick={() => setEditing(true)}>
                 {value.trim() ? (
-                    markdown ? (
-                        <Markdown remarkPlugins={[remarkGfm]}>{value}</Markdown>
-                    ) : (
-                        <div className="plain">
-                            <Rich text={value} />
-                        </div>
-                    )
+                    <Markdown remarkPlugins={[remarkGfm]} components={mdComponents}>
+                        {value}
+                    </Markdown>
                 ) : (
                     <p className="muted">{placeholder}</p>
                 )}
@@ -264,10 +282,11 @@ export function NotesField({
         )
     return (
         <textarea
+            id={`${id}-edit`}
             ref={ref}
-            className="daily-area"
+            className={`daily-area${fill ? ' fill' : ''}`}
             value={v}
-            rows={Math.max(6, v.split('\n').length + 1)}
+            rows={fill ? undefined : Math.max(6, v.split('\n').length + 1)}
             onChange={(e) => setV(e.target.value)}
             onBlur={() => {
                 setEditing(false)
