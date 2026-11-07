@@ -29,12 +29,7 @@ const GROUPS: { id: Group; label: string; hint?: string }[] = [
 ]
 export const groupOf = (l: ItemLine): Group => (l.item.done ? 'done' : l.item.due ? 'due' : l.item.later ? 'later' : 'triage')
 
-export function ListView({ kind }: { kind: ListKind }) {
-    const open = useStore((s) => s.openItem)
-    const exists = useStore((s) => (s.openItem ? !!s.lists[s.openItem.kind][s.openItem.index]?.item : false))
-    if (open && open.kind === kind && exists) return <ItemDetail kind={kind} index={open.index} />
-    return <ItemList kind={kind} />
-}
+export const ListView = ({ kind }: { kind: ListKind }) => <ItemList kind={kind} />
 
 function ItemList({ kind }: { kind: ListKind }) {
     const s = useStore()
@@ -120,7 +115,7 @@ function ItemList({ kind }: { kind: ListKind }) {
     )
 }
 
-function ItemDetail({ kind, index }: { kind: ListKind; index: number }) {
+export function ItemDetail({ kind, index }: { kind: ListKind; index: number }) {
     const s = useStore()
     const line = s.lists[kind][index] as ItemLine
     const it = line.item
@@ -157,7 +152,7 @@ function ItemDetail({ kind, index }: { kind: ListKind; index: number }) {
                 void s.removeItem(kind, id)
             }
         },
-    })
+    }, { modal: true })
 
     return (
         <div className="page detail">

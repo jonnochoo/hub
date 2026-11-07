@@ -11,11 +11,7 @@ import { Elapsed } from '../components/Elapsed'
 
 const ORDER: Status[] = ['in-progress', 'blocked', 'review', 'todo', 'done']
 
-export function TicketsView() {
-    const openTicket = useStore((s) => s.openTicket)
-    const exists = useStore((s) => s.tickets.some((t) => t.file === s.openTicket))
-    return openTicket && exists ? <TicketDetail file={openTicket} /> : <TicketList />
-}
+export const TicketsView = () => <TicketList />
 
 function TicketList() {
     const s = useStore()
@@ -89,7 +85,7 @@ function TicketList() {
     )
 }
 
-function TicketDetail({ file }: { file: string }) {
+export function TicketDetail({ file }: { file: string }) {
     const s = useStore()
     const tk = s.tickets.find((x) => x.file === file) as Ticket
     const subs = itemsOf(tk.subtasks)
@@ -118,7 +114,7 @@ function TicketDetail({ file }: { file: string }) {
             if (confirm(`Delete ${ticketLabel(tk)}?`)) void s.removeTicket(file)
         },
         ...Object.fromEntries(STATUSES.map((st, i) => [String(i + 1), () => void s.setStatus(file, st)])),
-    })
+    }, { modal: true })
 
     return (
         <div className="page detail">

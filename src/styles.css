@@ -897,3 +897,56 @@ main:has(.page.today) {
         overflow: visible;
     }
 }
+
+/* Notes scroll with wheel/keys but show no scrollbar. */
+.today-notes {
+    scrollbar-width: none;
+}
+.today-notes::-webkit-scrollbar {
+    display: none;
+}
+
+/* The notes column fills its height exactly; the textarea flexes inside it, so
+   neither the column nor the box needs a scrollbar of its own. */
+.col-notes {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+.col-notes .today-notes {
+    flex: 1;
+    height: auto;
+    min-height: 0;
+    margin-top: 10px;
+}
+
+/* ---- detail modal ------------------------------------------------------- */
+.detail-overlay {
+    z-index: 15;
+    padding-top: 6vh;
+}
+.detail-modal {
+    position: relative;
+    width: min(920px, 94vw);
+    max-height: 88vh;
+    padding: 22px 26px 18px;
+}
+.detail-modal .page {
+    max-width: none;
+}
+.modal-close {
+    position: absolute;
+    top: 10px;
+    right: 12px;
+    background: none;
+    border: 0;
+    color: var(--muted);
+    font-size: 11px;
+    cursor: pointer;
+}
+.modal-close:hover {
+    color: var(--text);
+}
+.detail-modal .page-header {
+    padding-right: 52px;
+}

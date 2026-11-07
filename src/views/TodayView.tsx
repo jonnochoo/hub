@@ -210,7 +210,7 @@ export function TodayView() {
                 </div>
 
                 {/* ---- notes ----------------------------------------------- */}
-                <div className="col">
+                <div className="col col-notes">
                     <h2 className="col-title">
                         Notes <span className="muted">(n)</span>
                     </h2>

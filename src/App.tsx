@@ -7,8 +7,8 @@ import { Elapsed } from './components/Elapsed'
 import { useNow } from './components/ui'
 import { Modals } from './components/Modals'
 import { TodayView } from './views/TodayView'
-import { TicketsView } from './views/TicketsView'
-import { ListView } from './views/ListView'
+import { TicketDetail, TicketsView } from './views/TicketsView'
+import { ItemDetail, ListView } from './views/ListView'
 import { DailyView } from './views/DailyView'
 
 const NAV: { id: ViewId; label: string; key: string }[] = [
@@ -101,6 +101,7 @@ export default function App() {
                 </main>
             </div>
 
+            <DetailModal />
             <Modals />
             {s.toastMsg && <div className="toast">{s.toastMsg}</div>}
         </div>
@@ -119,4 +120,23 @@ function View() {
         default:
             return <ListView key={view} kind={view} />
     }
+}
+
+/** Ticket / item detail, shown as a modal over whichever view is current. */
+function DetailModal() {
+    const ticket = useStore((s) => (s.openTicket && s.tickets.some((t) => t.file === s.openTicket) ? s.openTicket : null))
+    const item = useStore((s) => (s.openItem && s.lists[s.openItem.kind][s.openItem.index]?.item ? s.openItem : null))
+    const { setOpenTicket, setOpenItem } = useStore.getState()
+    if (!ticket && !item) return null
+    const close = () => (ticket ? setOpenTicket(null) : setOpenItem(item!.kind, null))
+    return (
+        <div className="overlay detail-overlay" onMouseDown={close}>
+            <div className="modal detail-modal" onMouseDown={(e) => e.stopPropagation()}>
+                <button className="modal-close" onClick={close} title="Close">
+                    Esc ✕
+                </button>
+                {ticket ? <TicketDetail file={ticket} /> : <ItemDetail kind={item!.kind} index={item!.index} />}
+            </div>
+        </div>
+    )
 }

@@ -196,11 +196,11 @@ export const useStore = create<State>((set, get) => {
         setView(view) {
             set({ view, openTicket: null, openItem: null, search: '' })
         },
-        setOpenTicket: (openTicket) => set({ openTicket, view: openTicket ? 'tickets' : get().view }),
-        setOpenItem: (kind, index) => set({ openItem: index === null ? null : { kind, index }, view: kind }),
+        setOpenTicket: (openTicket) => set({ openTicket }),
+        setOpenItem: (kind, index) => set({ openItem: index === null ? null : { kind, index } }),
         openItemById(kind, id) {
             const index = get().lists[kind].findIndex((l) => l.id === id)
-            if (index >= 0) set({ openItem: { kind, index }, view: kind, search: '' })
+            if (index >= 0) set({ openItem: { kind, index } })
         },
         setModal: (modal) => set({ modal }),
         setSearch: (search) => set({ search }),
