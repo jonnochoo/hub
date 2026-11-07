@@ -5,7 +5,7 @@ import { ADD_TO_LIST, parseCapture, parseTicketInput, useStore, type AddKind } f
 import { setTheme, THEMES, getTheme } from '../theme'
 
 const KINDS: { kind: AddKind; label: string; hint: string }[] = [
-    { kind: 'task', label: 'Task', hint: 'Reply to Bob ^tom !   (^date, ! = priority)' },
+    { kind: 'task', label: 'Task', hint: 'Reply to Bob ^tom !   (^date or ^later; no date = triage; ! = priority)' },
     { kind: 'routine', label: 'Daily', hint: 'Check PRs and email   (shows on Today every day)' },
     { kind: 'ticket', label: 'Ticket', hint: 'ABC-123 Fix login https://jira…/ABC-123   (^date = plan for)' },
     { kind: 'learn', label: 'Learn', hint: 'Rust lifetimes, https://…' },
@@ -59,10 +59,11 @@ function AddModal({ initial, due }: { initial: AddKind; due?: string }) {
             toast(`Ticket added${t.key ? ` (${t.key})` : ''}`)
             if (!keepOpen) useStore.getState().setOpenTicket(file)
         } else {
-            const { text: body, due: d, pri } = parseCapture(raw)
+            const { text: body, due: d, pri, later } = parseCapture(raw)
             if (!body) return
             await addItem(ADD_TO_LIST[kind], body, {
                 pri: pri || undefined,
+                later: later && kind !== 'idea' ? true : undefined,
                 due: d ?? (kind === 'task' ? due : undefined),
             })
             toast(`${KINDS.find((k) => k.kind === kind)!.label} added`)
@@ -197,10 +198,11 @@ export const SHORTCUTS: { group: string; keys: [string, string][] }[] = [
             ['Ctrl+d / Ctrl+u', 'Jump 5 down / up'],
             ['s', 'Start working (clock in)'],
             ['c', 'Complete / reopen'],
-            ['e', 'Edit text'],
-            ['n', 'Edit notes'],
+            ['e', 'Open the item page (everything editable inline)'],
+            ['n', '(on an item page) edit notes'],
             ['d', 'Set due / plan date  (today, tom, mon, +3, +2w, 25 dec)'],
             ['t', 'Plan for today'],
+            ['l', 'Park as later (tasks, learn, questions). No date + not later = Triage'],
             ['p', 'Postpone a day'],
             ['!', 'Toggle priority'],
             ['o', 'Open first link'],
@@ -216,7 +218,7 @@ export const SHORTCUTS: { group: string; keys: [string, string][] }[] = [
             ['Enter', 'Open ticket'],
             ['Esc', 'Back to list'],
             ['x', '(in a ticket) tick subtask'],
-            ['a', '(in a ticket) add subtask'],
+            ['a', '(in a ticket) add subtask (inline)'],
             ['r', '(in a ticket) rename subtask'],
             ['e / u / n', '(in a ticket) edit title / url / notes'],
             ['D', '(in a ticket) delete ticket'],

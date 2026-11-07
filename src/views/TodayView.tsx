@@ -4,7 +4,7 @@ import { addDays, daysBetween, fmtDate, fmtMins, today } from '../lib/dates'
 import { itemsOf, type Item } from '../lib/md'
 import { ticketLabel, type Ticket } from '../lib/model'
 import { useHotkeys } from '../lib/hotkeys'
-import { promptDate, promptText } from '../lib/prompts'
+import { promptDate } from '../lib/prompts'
 import { Chip, Empty, PageHeader, Rich, Row, TypeIcon, useCursor } from '../components/ui'
 import { Elapsed } from '../components/Elapsed'
 
@@ -69,7 +69,7 @@ export function TodayView() {
         Enter: () => {
             if (!row) return
             if (row.kind === 'ticket') s.setOpenTicket(row.t.file)
-            else promptText('Edit', row.item.text, (v) => s.patchItem(row.kind === 'routine' ? 'routine' : 'tasks', row.id, { text: v.trim() }))
+            else s.openItemById(row.kind === 'routine' ? 'routine' : 'tasks', row.id)
         },
         s: () => row && void start(row),
         c: () => {
@@ -93,6 +93,10 @@ export function TodayView() {
         a: () => s.setModal({ type: 'add', kind: 'task', due: t }),
     })
 
+    const triageCount = (['tasks', 'learn', 'questions'] as const).reduce(
+        (n, k) => n + itemsOf(s.lists[k]).filter((l) => !l.item.done && !l.item.due && !l.item.later).length,
+        0
+    )
     const todayLog = s.dailies[t]?.log ?? []
     const clocked = todayLog.reduce((sum, l) => sum + Number(l.match(/^- \d\d:\d\d–\d\d:\d\d \((\d+)m\)/)?.[1] ?? 0), 0)
     const prevDate = s.dailyDates.find((d) => d < t)
@@ -113,6 +117,7 @@ export function TodayView() {
     return (
         <div className="page">
             <PageHeader title="Today" sub={fmtDate(t) + ' · ' + new Date().toLocaleDateString(undefined, { day: 'numeric', month: 'long' })}>
+                {triageCount > 0 && <Chip tone="warn">{triageCount} to triage</Chip>}
                 {clocked > 0 && <Chip tone="accent">⏱ {fmtMins(clocked)} clocked</Chip>}
             </PageHeader>
             <div className="split">

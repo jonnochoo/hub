@@ -67,12 +67,15 @@ interface State {
     toastMsg: string
     search: string
     showDone: boolean
+    openItem: { kind: ListKind; index: number } | null
 
     init(): Promise<void>
     reload(): Promise<void>
     setVault(path: string): Promise<void>
     setView(v: ViewId): void
     setOpenTicket(f: string | null): void
+    setOpenItem(kind: ListKind, index: number | null): void
+    openItemById(kind: ListKind, id: string): void
     setModal(m: Modal | null): void
     setSearch(s: string): void
     toggleShowDone(): void
@@ -164,6 +167,7 @@ export const useStore = create<State>((set, get) => {
         toastMsg: '',
         search: '',
         showDone: false,
+        openItem: null,
 
         async init() {
             const vaultPath = await vault.path()
@@ -190,9 +194,14 @@ export const useStore = create<State>((set, get) => {
         },
 
         setView(view) {
-            set({ view, openTicket: null, search: '' })
+            set({ view, openTicket: null, openItem: null, search: '' })
         },
         setOpenTicket: (openTicket) => set({ openTicket, view: openTicket ? 'tickets' : get().view }),
+        setOpenItem: (kind, index) => set({ openItem: index === null ? null : { kind, index }, view: kind }),
+        openItemById(kind, id) {
+            const index = get().lists[kind].findIndex((l) => l.id === id)
+            if (index >= 0) set({ openItem: { kind, index }, view: kind, search: '' })
+        },
         setModal: (modal) => set({ modal }),
         setSearch: (search) => set({ search }),
         toggleShowDone: () => set((s) => ({ showDone: !s.showDone })),
@@ -209,7 +218,13 @@ export const useStore = create<State>((set, get) => {
         },
 
         async patchItem(kind, id, patch) {
-            const lines = mapItem(get().lists[kind], id, (it) => ({ ...it, ...patch }))
+            const lines = mapItem(get().lists[kind], id, (it) => {
+                const next = { ...it, ...patch }
+                // A date and "later" are mutually exclusive; neither means triage.
+                if (patch.due) next.later = undefined
+                if (patch.later) next.due = undefined
+                return next
+            })
             await saveList(kind, lines)
         },
 
@@ -347,10 +362,15 @@ export const useStore = create<State>((set, get) => {
 // ---------------------------------------------------------------------------
 // Quick-capture parsing:  "Reply to Bob ^tom !"   "ABC-123 Fix login https://jira/…"
 
-export function parseCapture(input: string): { text: string; due?: string; pri: boolean } {
+export function parseCapture(input: string): { text: string; due?: string; pri: boolean; later?: boolean } {
     let due: string | undefined
+    let later: boolean | undefined
     let pri = false
     let text = input.replace(/(?:^|\s)\^(\S+)/, (m, d: string) => {
+        if (d.toLowerCase() === 'later') {
+            later = true
+            return ''
+        }
         const p = parseDate(d)
         if (!p) return m
         due = p
@@ -360,7 +380,7 @@ export function parseCapture(input: string): { text: string; due?: string; pri: 
         pri = true
         return ''
     })
-    return { text: text.trim(), due, pri }
+    return { text: text.trim(), due, pri, later }
 }
 
 export function parseTicketInput(input: string): { key: string; title: string; url: string; planned: string } {
@@ -414,6 +434,7 @@ folder and reloads when files change.
   indented lines are notes for the item above
 \`\`\`
 
+- Tasks, learn and questions are either dated (\`due:\`), parked (\`@later\`), or neither = triage.
 - \`!\` marks high priority, \`due:\` is the due date, \`added:\` / \`done:\` are bookkeeping dates (ISO).
 - Other lines (headings, prose) are preserved as-is.
 

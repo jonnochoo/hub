@@ -1,3 +1,5 @@
+import Markdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { openUrl } from '../lib/fs'
 import type { Bindings } from '../lib/hotkeys'
@@ -215,5 +217,84 @@ export function TypeIcon({ kind }: { kind: 'ticket' | 'task' | 'routine' }) {
                 <path d={ICONS[kind]} />
             </svg>
         </span>
+    )
+}
+
+/** Markdown notes shown rendered; click (or press n) to edit in place, blur to save. */
+export function NotesField({
+    value,
+    placeholder,
+    onCommit,
+    markdown = true,
+}: {
+    value: string
+    placeholder: string
+    onCommit: (v: string) => void
+    markdown?: boolean
+}) {
+    const [editing, setEditing] = useState(false)
+    const [v, setV] = useState(value)
+    const ref = useRef<HTMLTextAreaElement>(null)
+    useEffect(() => {
+        if (!editing) setV(value)
+    }, [value, editing])
+    useEffect(() => {
+        if (editing) ref.current?.focus()
+    }, [editing])
+
+    if (!editing)
+        return (
+            <div id="f-notes-view" className="notes-view" onClick={() => setEditing(true)}>
+                {value.trim() ? (
+                    markdown ? (
+                        <Markdown remarkPlugins={[remarkGfm]}>{value}</Markdown>
+                    ) : (
+                        <div className="plain">
+                            <Rich text={value} />
+                        </div>
+                    )
+                ) : (
+                    <p className="muted">{placeholder}</p>
+                )}
+            </div>
+        )
+    return (
+        <textarea
+            ref={ref}
+            className="daily-area"
+            value={v}
+            rows={Math.max(6, v.split('\n').length + 1)}
+            onChange={(e) => setV(e.target.value)}
+            onBlur={() => {
+                setEditing(false)
+                if (v.trimEnd() !== value) onCommit(v.trimEnd())
+            }}
+            onKeyDown={(e) => {
+                if (e.key === 'Escape' || (e.key === 'Enter' && e.ctrlKey)) e.currentTarget.blur()
+            }}
+        />
+    )
+}
+
+/** An always-visible input that adds an entry on Enter and stays focused. */
+export function AddInput({ id, placeholder, onAdd }: { id: string; placeholder: string; onAdd: (v: string) => void }) {
+    const [v, setV] = useState('')
+    return (
+        <input
+            id={id}
+            className="add-input"
+            value={v}
+            placeholder={placeholder}
+            onChange={(e) => setV(e.target.value)}
+            onKeyDown={(e) => {
+                if (e.key === 'Enter' && v.trim()) {
+                    onAdd(v.trim())
+                    setV('')
+                } else if (e.key === 'Escape') {
+                    setV('')
+                    e.currentTarget.blur()
+                }
+            }}
+        />
     )
 }

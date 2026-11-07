@@ -8,6 +8,7 @@ export interface Item {
     added?: string
     completed?: string
     pri?: boolean
+    later?: boolean // parked: no date yet, deliberately not now
     notes: string[]
 }
 export interface RawLine {
@@ -35,6 +36,10 @@ function parseItemText(s: string): Omit<Item, 'done' | 'notes'> {
     })
     out.text = out.text.replace(/(?:^|\s)!(?=\s|$)/g, () => {
         out.pri = true
+        return ''
+    })
+    out.text = out.text.replace(/(?:^|\s)@later(?=\s|$)/g, () => {
+        out.later = true
         return ''
     })
     out.text = out.text.trim()
@@ -65,6 +70,7 @@ export function parseList(content: string): Line[] {
 export function serializeItem(it: Item): string[] {
     let head = `- [${it.done ? 'x' : ' '}] ${it.text}`
     if (it.pri) head += ' !'
+    if (it.later) head += ' @later'
     if (it.due) head += ` due:${it.due}`
     if (it.added) head += ` added:${it.added}`
     if (it.completed) head += ` done:${it.completed}`

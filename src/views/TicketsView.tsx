@@ -1,6 +1,4 @@
 import { useMemo } from 'react'
-import Markdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
 import { useStore } from '../store'
 import { addDays, fmtDate, fmtMins, today } from '../lib/dates'
 import { itemsOf, mapItem, newItem } from '../lib/md'
@@ -8,7 +6,7 @@ import { STATUSES, ticketLabel, type Status, type Ticket } from '../lib/model'
 import { useHotkeys } from '../lib/hotkeys'
 import { promptDate, promptText } from '../lib/prompts'
 import { openUrl } from '../lib/fs'
-import { Chip, Empty, InlineField, PageHeader, Row, useCursor } from '../components/ui'
+import { AddInput, Chip, Empty, InlineField, NotesField, PageHeader, Row, useCursor } from '../components/ui'
 import { Elapsed } from '../components/Elapsed'
 
 const ORDER: Status[] = ['in-progress', 'blocked', 'review', 'todo', 'done']
@@ -106,12 +104,12 @@ function TicketDetail({ file }: { file: string }) {
         h: () => s.setOpenTicket(null),
         x: () => sub && void s.editSubtasks(file, (ls) => mapItem(ls, sub.id, (it) => ({ ...it, done: !it.done }))),
         Enter: () => sub && void s.editSubtasks(file, (ls) => mapItem(ls, sub.id, (it) => ({ ...it, done: !it.done }))),
-        a: () => promptText('Add subtask', '', (v) => s.editSubtasks(file, (ls) => [...ls, newItem(v.trim())])),
+        a: () => document.getElementById('f-sub')?.focus(),
         r: () => sub && promptText('Rename subtask', sub.item.text, (v) => s.editSubtasks(file, (ls) => mapItem(ls, sub.id, (it) => ({ ...it, text: v.trim() })))),
         '#': () => sub && void s.editSubtasks(file, (ls) => ls.filter((l) => l.id !== sub.id)),
         e: () => document.getElementById('f-title')?.focus(),
         u: () => document.getElementById('f-url')?.focus(),
-        n: () => promptText('Notes (markdown)', tk.notes, (v) => s.patchTicket(file, { notes: v.trim() }), { multiline: true, allowEmpty: true }),
+        n: () => document.getElementById('f-notes-view')?.click(),
         o: () => tk.url && void openUrl(tk.url),
         s: () => (working ? void s.stopWork() : void s.startWork({ kind: 'ticket', ref: tk.file, label: ticketLabel(tk) })),
         t: () => void s.patchTicket(file, { planned: t }).then(() => s.toast('Planned for today')),
@@ -160,11 +158,6 @@ function TicketDetail({ file }: { file: string }) {
             </div>
 
             <h3 className="group">Subtasks</h3>
-            {subs.length === 0 && (
-                <p className="muted">
-                    None yet. Press <kbd>a</kbd> to add one.
-                </p>
-            )}
             {subs.map((l, i) => (
                 <Row
                     key={l.id}
@@ -177,12 +170,12 @@ function TicketDetail({ file }: { file: string }) {
                 </Row>
             ))}
 
+            <AddInput id="f-sub" placeholder="+ Add subtask (a)" onAdd={(v) => s.editSubtasks(file, (ls) => [...ls, newItem(v)])} />
+
             <h3 className="group">
-                Notes <span className="muted">(n to edit)</span>
+                Notes <span className="muted">(n to edit, markdown)</span>
             </h3>
-            <div className="notes">
-                {tk.notes ? <Markdown remarkPlugins={[remarkGfm]}>{tk.notes}</Markdown> : <p className="muted">No notes.</p>}
-            </div>
+            <NotesField value={tk.notes} placeholder="No notes. Click or press n to add some." onCommit={(v) => void s.patchTicket(file, { notes: v })} />
             <p className="muted foot">
                 <kbd>1</kbd>–<kbd>5</kbd> status · <kbd>s</kbd> clock in/out · <kbd>Esc</kbd> back · <kbd>?</kbd> all keys
             </p>
