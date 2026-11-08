@@ -1,10 +1,10 @@
 import { useEffect, useMemo } from 'react'
-import { useStore } from '../store'
+import { MAX_POSTITS, useStore } from '../store'
 import { addDays, daysBetween, fmtDate, fmtMins, fromIso, today } from '../lib/dates'
-import { itemsOf, onDay, type Item } from '../lib/md'
+import { itemsOf, onDay, type Item, type ItemLine } from '../lib/md'
 import { ticketLabel, type ListKind, type Ticket } from '../lib/model'
 import { useHotkeys } from '../lib/hotkeys'
-import { promptDate } from '../lib/prompts'
+import { promptDate, promptText } from '../lib/prompts'
 import { Chip, Empty, NotesField, PageHeader, Rich, Row, TypeIcon, useCursor } from '../components/ui'
 import { Elapsed } from '../components/Elapsed'
 
@@ -20,8 +20,6 @@ const SECTION_TITLE: Record<Section, string> = {
     learn: 'Learn due',
 }
 const sectionOf = (r: TRow): Section => (r.kind === 'ticket' ? 'focus' : r.list === 'tasks' ? 'focus' : r.list)
-
-const daySeed = (d: string) => [...d].reduce((a, c) => a + c.charCodeAt(0), 0)
 
 export function TodayView() {
     const s = useStore()
@@ -60,6 +58,7 @@ export function TodayView() {
 
     const { cur, setC, nav } = useCursor(rows.length)
     const row = rows[cur]
+    const postits = itemsOf(s.lists.reminders).filter((l) => !l.item.done).slice(0, MAX_POSTITS)
     const firstOf = (sec: Section) => rows.find((r) => sectionOf(r) === sec)
     const routineRows = rows.filter((r) => sectionOf(r) === 'routine')
     const routineDone = routineRows.filter((r) => r.kind === 'item' && r.item.completed === t).length
@@ -98,6 +97,9 @@ export function TodayView() {
         },
         '!': () => row?.kind === 'item' && row.list !== 'routine' && void s.patchItem(row.list, row.id, { pri: !row.item.pri }),
         n: () => document.getElementById('notes-today-view')?.click(),
+        m: () => s.setModal({ type: 'add', kind: 'reminder' }),
+        '1': () => postits[0] && void s.toggleItem('reminders', postits[0].id),
+        '2': () => postits[1] && void s.toggleItem('reminders', postits[1].id),
         a: () => s.setModal({ type: 'add', kind: 'task', due: t }),
     })
 
@@ -113,13 +115,6 @@ export function TodayView() {
         .filter((tk) => tk.status !== 'done' && daysBetween(tk.updated, t) >= 4)
         .sort((a, b) => a.updated.localeCompare(b.updated))
         .slice(0, 4)
-
-    const resurface = (['questions', 'learn', 'ideas'] as const)
-        .map((k) => {
-            const open = itemsOf(s.lists[k]).filter((l) => !l.item.done && !l.item.due)
-            return open.length ? { k, item: open[daySeed(t + k) % open.length].item } : null
-        })
-        .filter((x) => x !== null)
 
     return (
         <div className="page today">
@@ -219,7 +214,9 @@ export function TodayView() {
                 </div>
 
                 {/* ---- log ------------------------------------------------- */}
-                <div className="col">
+                <div className="col col-log">
+                    <PostIts postits={postits} />
+                    <div className="log-scroll">
                     <h2 className="col-title">Log</h2>
                     <section>
                         <h3>Today</h3>
@@ -245,18 +242,43 @@ export function TodayView() {
                         </section>
                     )}
 
-                    {resurface.length > 0 && (
-                        <section>
-                            <h3>Don't forget</h3>
-                            {resurface.map((x) => (
-                                <div key={x.k} className="mini">
-                                    <Chip>{x.k === 'questions' ? 'question' : x.k === 'learn' ? 'learn' : 'idea'}</Chip> <Rich text={x.item.text} />
-                                </div>
-                            ))}
-                        </section>
-                    )}
+                    </div>
                 </div>
             </div>
+        </div>
+    )
+}
+
+/** Up to two sticky notes. Tick (or press 1 / 2) to clear; double-click to edit. */
+function PostIts({ postits }: { postits: ItemLine[] }) {
+    const s = useStore()
+    if (postits.length === 0)
+        return (
+            <div className="postit-empty" onClick={() => s.setModal({ type: 'add', kind: 'reminder' })}>
+                + post-it <kbd>m</kbd>
+            </div>
+        )
+    return (
+        <div className="postits">
+            {postits.map((p, i) => (
+                <div
+                    key={p.id}
+                    className={`postit n${i}`}
+                    onDoubleClick={() => promptText('Edit post-it', p.item.text, (v) => s.patchItem('reminders', p.id, { text: v.trim() }))}
+                >
+                    <button className="postit-x" title="Clear" onClick={() => void s.toggleItem('reminders', p.id)}>
+                        <kbd>{i + 1}</kbd> ✓
+                    </button>
+                    <div className="postit-text">
+                        <Rich text={p.item.text} />
+                    </div>
+                </div>
+            ))}
+            {postits.length < MAX_POSTITS && (
+                <div className="postit-empty" onClick={() => s.setModal({ type: 'add', kind: 'reminder' })}>
+                    + post-it <kbd>m</kbd>
+                </div>
+            )}
         </div>
     )
 }

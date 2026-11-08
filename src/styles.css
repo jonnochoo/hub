@@ -1010,3 +1010,124 @@ main:has(.page.today) {
     scrollbar-width: none;
 }
 .daily-area.fill::-webkit-scrollbar { display: none; }
+
+/* ---- post-its ------------------------------------------------------------ */
+.postits {
+    display: grid;
+    gap: 14px;
+    margin: 4px 0 18px;
+}
+.postit {
+    position: relative;
+    padding: 18px 16px 16px;
+    min-height: 92px;
+    background: #fff08a;
+    color: #3b3306;
+    font-size: 15px;
+    line-height: 1.4;
+    border-radius: 2px 2px 14px 2px;
+    box-shadow: 0 6px 14px rgba(0, 0, 0, 0.35), inset 0 -18px 24px -18px rgba(120, 90, 0, 0.35);
+    transform: rotate(-1deg);
+}
+.postit.n1 {
+    background: #ffc9de;
+    color: #4a1230;
+    transform: rotate(1.2deg);
+}
+.postit a,
+.postit .wikilink {
+    color: inherit;
+    text-decoration: underline;
+}
+.postit-text {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    font-weight: 500;
+}
+.postit-x {
+    position: absolute;
+    top: 4px;
+    right: 6px;
+    background: none;
+    border: 0;
+    color: inherit;
+    opacity: 0.45;
+    cursor: pointer;
+    font-size: 12px;
+}
+.postit:hover .postit-x {
+    opacity: 1;
+}
+.postit-x kbd {
+    background: rgba(0, 0, 0, 0.1);
+    border-color: rgba(0, 0, 0, 0.25);
+    color: inherit;
+}
+.postit-empty {
+    margin: 4px 0 18px;
+    padding: 10px;
+    text-align: center;
+    border: 1px dashed var(--border);
+    border-radius: 6px;
+    color: var(--muted);
+    font-size: 12px;
+    cursor: pointer;
+}
+.postit-empty:hover {
+    border-color: var(--accent);
+    color: var(--text);
+}
+
+/* ---- post-its: calm, straight, and pinned above the scrolling log -------- */
+.col-log {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding-right: 0;
+}
+.log-scroll {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    padding-right: 6px;
+}
+.postits {
+    flex: none;
+    gap: 10px;
+    margin: 4px 0 14px;
+}
+.postit,
+.postit.n1 {
+    transform: none;
+    min-height: 0;
+    padding: 12px 14px;
+    font-size: 14px;
+    color: var(--text);
+    background: color-mix(in srgb, var(--warn) 14%, var(--panel));
+    border: 1px solid color-mix(in srgb, var(--warn) 35%, var(--border));
+    border-left: 4px solid var(--warn);
+    border-radius: 4px;
+    box-shadow: none;
+}
+.postit.n1 {
+    background: color-mix(in srgb, var(--accent) 12%, var(--panel));
+    border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+    border-left-color: var(--accent);
+}
+.postit-text {
+    font-weight: 400;
+}
+.postit-x kbd {
+    background: var(--raised);
+    border-color: var(--border);
+    color: var(--muted);
+}
+
+/* ---- themed scrollbars: thin, and the same tones as the rest of the app -- */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+}
+*:hover {
+    scrollbar-color: color-mix(in srgb, var(--muted) 55%, var(--border)) transparent;
+}

@@ -103,11 +103,12 @@ export interface Active {
     start: number // epoch ms
 }
 
-export type ListKind = 'tasks' | 'routine' | 'learn' | 'questions' | 'ideas'
-export const LIST_KINDS: ListKind[] = ['tasks', 'routine', 'learn', 'questions', 'ideas']
+export type ListKind = 'tasks' | 'routine' | 'reminders' | 'learn' | 'questions' | 'ideas'
+export const LIST_KINDS: ListKind[] = ['tasks', 'routine', 'reminders', 'learn', 'questions', 'ideas']
 export const LIST_TITLE: Record<ListKind, string> = {
     tasks: 'Tasks',
     routine: 'Daily routine',
+    reminders: 'Post-its',
     learn: 'Things to learn',
     questions: 'Questions',
     ideas: 'Future & ideas',

@@ -2,12 +2,13 @@ import { useEffect, useRef, useState } from 'react'
 import { useHotkeys } from '../lib/hotkeys'
 import { fmtDate } from '../lib/dates'
 import { normalizeEvery } from '../lib/md'
-import { ADD_TO_LIST, parseCapture, parseTicketInput, useStore, type AddKind } from '../store'
+import { ADD_TO_LIST, MAX_POSTITS, openPostits, parseCapture, parseTicketInput, useStore, type AddKind } from '../store'
 import { setTheme, THEMES, getTheme } from '../theme'
 
 const KINDS: { kind: AddKind; label: string; hint: string }[] = [
     { kind: 'task', label: 'Task', hint: 'Reply to Bob ^tom !   (^date or ^later; no date = triage; ! = priority)' },
-    { kind: 'routine', label: 'Daily', hint: 'Check PRs  every:weekdays   (daily by default; every:mon,wed,fri)' },
+    { kind: 'reminder', label: 'Post-it', hint: 'Call the bank before 3pm   (max 2, shown on Today)' },
+    { kind: 'routine', label: 'Daily', hint: 'Check PRs   (weekdays by default; every:daily, every:mon,wed,fri)' },
     { kind: 'ticket', label: 'Ticket', hint: 'ABC-123 Fix login https://jira…/ABC-123   (^date or ^later; none = triage)' },
     { kind: 'learn', label: 'Learn', hint: 'Rust lifetimes, https://…' },
     { kind: 'question', label: 'Question', hint: 'Why does the cache miss on cold start?' },
@@ -54,6 +55,10 @@ function AddModal({ initial, due }: { initial: AddKind; due?: string }) {
     async function submit(keepOpen: boolean) {
         const raw = text.trim()
         if (!raw) return
+        if (kind === 'reminder' && openPostits(useStore.getState().lists.reminders) >= MAX_POSTITS) {
+            toast(`Only ${MAX_POSTITS} post-its. Clear one first (1 or 2 on Today)`)
+            return
+        }
         if (kind === 'ticket') {
             const t = parseTicketInput(raw)
             const file = await addTicket(t)
@@ -196,6 +201,8 @@ export const SHORTCUTS: { group: string; keys: [string, string][] }[] = [
         keys: [
             ['a', 'Add (Tab switches task / ticket / learn / question / idea)'],
             ['S', 'Clock out of the active item'],
+            ['m', '(Today) new post-it, max 2'],
+            ['1 / 2', '(Today) clear post-it 1 / 2'],
             ['/', 'Search'],
             ['r', 'Reload from disk'],
             [',', 'Settings'],
