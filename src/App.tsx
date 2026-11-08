@@ -6,21 +6,41 @@ import { fmtDur } from './lib/dates'
 import { Elapsed } from './components/Elapsed'
 import { useNow } from './components/ui'
 import { Modals } from './components/Modals'
+import { Icon } from './components/icons'
 import { TodayView } from './views/TodayView'
 import { TicketDetail, TicketsView } from './views/TicketsView'
 import { ItemDetail, ListView } from './views/ListView'
 import { DailyView } from './views/DailyView'
 
-const NAV: { id: ViewId; label: string; key: string }[] = [
-    { id: 'today', label: 'Today', key: 't' },
-    { id: 'tickets', label: 'Tickets', key: 'i' },
-    { id: 'tasks', label: 'Tasks', key: 'a' },
-    { id: 'routine', label: 'Daily routine', key: 'r' },
-    { id: 'daily', label: 'Daily note', key: 'd' },
-    { id: 'learn', label: 'To learn', key: 'l' },
-    { id: 'questions', label: 'Questions', key: 'q' },
-    { id: 'ideas', label: 'Future', key: 'f' },
+type NavItem = { id: ViewId; label: string; key: string }
+
+// Today is the view; everything else is a feature, grouped under sub-headers.
+const VIEW: NavItem = { id: 'today', label: 'Today', key: 't' }
+const GROUPS: { title: string; items: NavItem[] }[] = [
+    {
+        title: 'Work',
+        items: [
+            { id: 'tickets', label: 'Tickets', key: 'i' },
+            { id: 'tasks', label: 'Tasks', key: 'a' },
+            { id: 'routine', label: 'Daily routine', key: 'r' },
+        ],
+    },
+    {
+        title: 'Notes',
+        items: [
+            { id: 'daily', label: 'Daily note', key: 'd' },
+            { id: 'questions', label: 'Questions', key: 'q' },
+        ],
+    },
+    {
+        title: 'Someday',
+        items: [
+            { id: 'learn', label: 'Learning', key: 'l' },
+            { id: 'ideas', label: 'Future ideas', key: 'f' },
+        ],
+    },
 ]
+const NAV: NavItem[] = [VIEW, ...GROUPS.flatMap((g) => g.items)]
 
 const DEFAULT_ADD: Partial<Record<ViewId, AddKind>> = {
     tickets: 'ticket',
@@ -58,23 +78,40 @@ export default function App() {
 
     if (!s.ready) return <div className="loading">Opening vault…</div>
 
+    const navButton = (n: NavItem) => (
+        <button key={n.id} className={`nav${s.view === n.id ? ' on' : ''}`} onClick={() => s.setView(n.id)}>
+            <span className="nav-label">
+                <Icon name={n.id} />
+                {n.label}
+            </span>
+            <kbd>g {n.key}</kbd>
+        </button>
+    )
+
     return (
         <div className={`app${s.active ? ' working' : ''}`}>
             <aside className="sidebar">
                 <div className="brand">Hub</div>
-                {NAV.map((n) => (
-                    <button key={n.id} className={`nav${s.view === n.id ? ' on' : ''}`} onClick={() => s.setView(n.id)}>
-                        <span>{n.label}</span>
-                        <kbd>g {n.key}</kbd>
-                    </button>
+                {navButton(VIEW)}
+                {GROUPS.map((g) => (
+                    <div key={g.title} className="nav-group">
+                        <div className="nav-head">{g.title}</div>
+                        {g.items.map(navButton)}
+                    </div>
                 ))}
                 <div className="spacer" />
                 <button className="nav" onClick={() => s.setModal({ type: 'add', kind: 'task' })}>
-                    <span>+ Add</span>
+                    <span className="nav-label">
+                        <Icon name="add" />
+                        Add
+                    </span>
                     <kbd>a</kbd>
                 </button>
                 <button className="nav" onClick={() => s.setModal({ type: 'help' })}>
-                    <span>Shortcuts</span>
+                    <span className="nav-label">
+                        <Icon name="help" />
+                        Shortcuts
+                    </span>
                     <kbd>?</kbd>
                 </button>
                 <div className="vault" title={s.vaultPath} onClick={() => s.setModal({ type: 'settings' })}>
