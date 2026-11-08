@@ -190,7 +190,7 @@ export const SHORTCUTS: { group: string; keys: [string, string][] }[] = [
             ['g i', 'Tickets'],
             ['g a', 'Tasks'],
             ['g r', 'Daily routine'],
-            ['g d', 'Daily Notes'],
+            ['g d', 'Daily note'],
             ['g l', 'Things to learn'],
             ['g q', 'Questions'],
             ['g f', 'Future / ideas'],
@@ -245,7 +245,7 @@ export const SHORTCUTS: { group: string; keys: [string, string][] }[] = [
         ],
     },
     {
-        group: 'Daily Notes',
+        group: 'Daily note',
         keys: [
             ['[ / ]', 'Previous / next day'],
             ['a', 'Append a timestamped note'],

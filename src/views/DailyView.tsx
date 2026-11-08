@@ -11,7 +11,6 @@ export function DailyView() {
     const t = today()
     const dates = s.dailyDates.includes(t) ? s.dailyDates : [t, ...s.dailyDates]
     const [date, setDate] = useState(t)
-    const [tab, setTab] = useState<'notes' | 'log'>('notes')
     const idx = Math.max(0, dates.indexOf(date))
     const daily = s.dailies[date]
 
@@ -19,11 +18,6 @@ export function DailyView() {
         void s.loadDaily(date)
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [date])
-
-    const editNotes = () => {
-        setTab('notes')
-        setTimeout(() => document.getElementById('notes-daily-view')?.click(), 0)
-    }
 
     const go = (d: number) => setDate(dates[Math.min(dates.length - 1, Math.max(0, idx + d))])
 
@@ -33,9 +27,8 @@ export function DailyView() {
         j: () => go(1),
         k: () => go(-1),
         'g d': () => setDate(t),
-        i: editNotes,
-        n: editNotes,
-        l: () => setTab('log'),
+        i: () => document.getElementById('notes-daily-view')?.click(),
+        n: () => document.getElementById('notes-daily-view')?.click(),
         a: () =>
             promptText('Add a note to ' + fmtDate(date), '', (v) => {
                 const stamp = date === t ? `${hhmm(new Date())} ` : ''
@@ -46,7 +39,7 @@ export function DailyView() {
 
     return (
         <div className="page daily">
-            <PageHeader title="Daily Notes" sub={fmtLong(date)} />
+            <PageHeader title="Daily note" sub={fmtLong(date)} />
             <div className="split daily-split">
                 <nav className="dates">
                     {dates.map((d) => (
@@ -57,31 +50,18 @@ export function DailyView() {
                     ))}
                 </nav>
                 <div className="main">
-                    <div className="tabs">
-                        <button className={tab === 'notes' ? 'on' : ''} onClick={() => setTab('notes')}>
-                            Notes
-                        </button>
-                        <button className={tab === 'log' ? 'on' : ''} onClick={() => setTab('log')}>
-                            Log{daily && daily.log.length > 0 ? ` (${daily.log.length})` : ''}
-                        </button>
-                    </div>
-                    {tab === 'notes' ? (
-                        <>
-                            <h3 className="group">
-                                Notes <span className="muted">(i to edit, Esc to save)</span>
-                            </h3>
-                            <NotesField
-                                id="notes-daily"
-                                value={daily?.notes ?? ''}
-                                placeholder="What did I do, decide, or learn? Click or press i to write. Markdown; [[ABC-123]] links a ticket."
-                                onCommit={(v) => void s.setDailyNotes(date, v)}
-                            />
-                        </>
-                    ) : daily && daily.log.length > 0 ? (
-                        <LogList lines={daily.log} />
-                    ) : (
-                        <p className="muted">Nothing logged. Clock in with <kbd>s</kbd> or complete something and it lands here.</p>
-                    )}
+                    <h3 className="group">Log</h3>
+                    {daily && daily.log.length > 0 ? <LogList lines={daily.log} /> : <p className="muted">Nothing logged. Clock in with <kbd>s</kbd> or complete something and it lands here.</p>}
+
+                    <h3 className="group">
+                        Notes <span className="muted">(i to edit, Esc to save)</span>
+                    </h3>
+                    <NotesField
+                        id="notes-daily"
+                        value={daily?.notes ?? ''}
+                        placeholder="What did I do, decide, or learn? Click or press i to write. Markdown; [[ABC-123]] links a ticket."
+                        onCommit={(v) => void s.setDailyNotes(date, v)}
+                    />
                 </div>
             </div>
         </div>
