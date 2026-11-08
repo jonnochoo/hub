@@ -1,8 +1,16 @@
 name: Release
 
-# Push a semver tag (e.g. v1.2.3) to build installers and publish a GitHub Release.
-# Use `pnpm release <patch|minor|major|x.y.z>` to bump versions, commit and tag.
+# Two ways to release (both follow semver):
+#  1. Actions tab -> Release -> "Run workflow", enter patch | minor | major | x.y.z.
+#     The workflow bumps the versions, commits to the branch, tags vX.Y.Z and builds.
+#  2. Locally: `pnpm release <bump>` then `git push --follow-tags` (tag push triggers the build).
 on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "patch, minor, major, or an exact version like 1.2.0 or 1.2.0-beta.1"
+        required: true
+        default: patch
   push:
     tags:
       - "v[0-9]+.[0-9]+.[0-9]+"
@@ -12,14 +20,43 @@ permissions:
   contents: write
 
 jobs:
-  verify:
-    name: Verify tag matches app version
+  prepare:
+    name: Prepare version
     runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
-      - name: Check versions
+
+      - name: Bump version, commit and tag (manual run)
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          VERSION: ${{ inputs.version }}
         run: |
-          tag="${GITHUB_REF_NAME#v}"
+          node scripts/release.mjs "$VERSION" --no-git
+          v=$(node -p "require('./package.json').version")
+          if git ls-remote --exit-code --tags origin "refs/tags/v$v" >/dev/null 2>&1; then
+            echo "::error::Tag v$v already exists"; exit 1
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json src-tauri/tauri.conf.json src-tauri/Cargo.toml src-tauri/Cargo.lock
+          git commit -m "chore(release): v$v"
+          git tag -a "v$v" -m "v$v"
+          git push origin "HEAD:${GITHUB_REF_NAME}" "v$v"
+
+      - name: Resolve tag
+        id: tag
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            echo "tag=v$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Verify tag matches app version
+        run: |
+          tag="${{ steps.tag.outputs.tag }}"; tag="${tag#v}"
           pkg=$(node -p "require('./package.json').version")
           tauri=$(node -p "require('./src-tauri/tauri.conf.json').version")
           cargo=$(grep -m1 '^version' src-tauri/Cargo.toml | cut -d'"' -f2)
@@ -30,7 +67,7 @@ jobs:
 
   release:
     name: Build (${{ matrix.label }})
-    needs: verify
+    needs: prepare
     strategy:
       fail-fast: false
       matrix:
@@ -54,6 +91,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.tag }}
 
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
@@ -81,9 +120,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: "Hub ${{ github.ref_name }}"
+          tagName: ${{ needs.prepare.outputs.tag }}
+          releaseName: "Hub ${{ needs.prepare.outputs.tag }}"
           releaseBody: "See the assets below to download the installer for your platform."
           releaseDraft: true
-          prerelease: ${{ contains(github.ref_name, '-') }}
+          prerelease: ${{ contains(needs.prepare.outputs.tag, '-') }}
           args: ${{ matrix.args }}

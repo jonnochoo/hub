@@ -112,14 +112,17 @@ The first Rust build takes several minutes; later builds are incremental.
 - **CI** (`.github/workflows/ci.yml`) runs on every PR and push to `main`: type-check and UI build, then `clippy` and a compile on Windows, macOS and Linux.
 - **Releases** follow [semver](https://semver.org). Pushing a `vX.Y.Z` tag runs `.github/workflows/release.yml`, which builds installers for Windows (x64), macOS (Apple Silicon and Intel) and Linux, and attaches them to a **draft** GitHub Release for you to review and publish. Tags with a suffix (e.g. `v1.0.0-beta.1`) are marked as pre-releases.
 
-To cut a release from a clean working tree:
+To cut a release, either:
 
-```bash
-pnpm release patch      # or minor, major, or an explicit version like 1.2.0
-git push --follow-tags
-```
+- **From GitHub (no local tools):** open **Actions > Release > Run workflow** on `main` and enter `patch`, `minor`, `major` or an exact version such as `1.2.0` / `1.2.0-beta.1`. The workflow bumps the version, commits it, tags `vX.Y.Z` and builds the installers.
+- **Locally**, from a clean working tree:
 
-`pnpm release` bumps the version in `package.json`, `src-tauri/tauri.conf.json` and `src-tauri/Cargo.toml` (plus `Cargo.lock`), commits and tags. The release workflow fails early if the tag doesn't match those files.
+  ```bash
+  pnpm release patch      # or minor, major, or an explicit version like 1.2.0
+  git push --follow-tags
+  ```
+
+Either way the version is bumped in `package.json`, `src-tauri/tauri.conf.json` and `src-tauri/Cargo.toml` (plus `Cargo.lock`), and the workflow fails early if the tag doesn't match those files. The manual run pushes a commit straight to the branch it runs on, so if `main` is protected, allow `github-actions[bot]` to bypass, or use the local route.
 
 ## Project layout
 
