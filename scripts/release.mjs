@@ -1,12 +1,14 @@
 #!/usr/bin/env node
-// Usage: pnpm release <patch|minor|major|x.y.z[-pre]>
+// Usage: pnpm release <patch|minor|major|x.y.z[-pre]> [--no-git]
 // Bumps the version in package.json, src-tauri/tauri.conf.json and
 // src-tauri/Cargo.toml (+ Cargo.lock), commits, and creates a vX.Y.Z tag.
 // Then push with: git push --follow-tags
 import { readFileSync, writeFileSync } from 'node:fs'
 import { execSync } from 'node:child_process'
 
-const arg = process.argv[2]
+const args = process.argv.slice(2)
+const noGit = args.includes('--no-git')
+const arg = args.find((a) => !a.startsWith('--'))
 if (!arg) {
     console.error('Usage: pnpm release <patch|minor|major|x.y.z>')
     process.exit(1)
@@ -15,7 +17,7 @@ if (!arg) {
 const run = (cmd) => execSync(cmd, { stdio: 'inherit' })
 const out = (cmd) => execSync(cmd).toString().trim()
 
-if (out('git status --porcelain')) {
+if (!noGit && out('git status --porcelain')) {
     console.error('Working tree is not clean. Commit or stash changes first.')
     process.exit(1)
 }
@@ -45,7 +47,12 @@ edit('src-tauri/tauri.conf.json', replaceFirst(/("version":\s*")[^"]+(")/, `$1${
 edit('src-tauri/Cargo.toml', replaceFirst(/^(version\s*=\s*")[^"]+(")/m, `$1${next}$2`))
 
 // Refresh Cargo.lock for the new package version.
-run('cargo update --manifest-path src-tauri/Cargo.toml --package hub --offline')
+run('cargo update --manifest-path src-tauri/Cargo.toml --package hub')
+
+if (noGit) {
+    console.log(next)
+    process.exit(0)
+}
 
 run('git add package.json src-tauri/tauri.conf.json src-tauri/Cargo.toml src-tauri/Cargo.lock')
 run(`git commit -m "chore(release): v${next}"`)
