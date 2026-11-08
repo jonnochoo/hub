@@ -9,7 +9,7 @@ export interface Item {
     completed?: string
     pri?: boolean
     later?: boolean // parked: no date yet, deliberately not now
-    every?: string // routine schedule, e.g. 'mon,wed,fri'. Undefined = daily
+    every?: string // routine schedule: 'daily', or e.g. 'mon,wed,fri'. Undefined = weekdays
     notes: string[]
 }
 export interface RawLine {
@@ -167,14 +167,27 @@ export function mapItem(lines: Line[], id: string, fn: (it: Item) => Item): Line
 }
 
 // ---- routine schedules ------------------------------------------------------
+// No `every:` means weekdays (Mon-Fri). `every:daily` includes weekends.
 
 export const DAY_NAMES = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
 /** Display order: Monday first. Values are Date#getDay() indexes. */
 export const WEEK = [1, 2, 3, 4, 5, 6, 0]
+const WEEKDAYS = [1, 2, 3, 4, 5]
+
+const daySet = (every: string | undefined): Set<number> =>
+    !every ? new Set(WEEKDAYS) : every === 'daily' ? new Set(WEEK) : new Set(every.split(',').map((d) => DAY_NAMES.indexOf(d)))
+
+function canonical(days: Set<number>): string {
+    if (days.size === 7) return 'daily'
+    if (days.size === 5 && WEEKDAYS.every((d) => days.has(d))) return '' // the default
+    return WEEK.filter((d) => days.has(d))
+        .map((d) => DAY_NAMES[d])
+        .join(',')
+}
 
 /**
- * Canonical schedule string for user input like "weekdays", "mon wed fri", "daily".
- * '' means every day. Returns null when the input can't be understood.
+ * Canonical schedule for user input like "weekdays", "mon wed fri", "daily".
+ * Returns '' for the default (weekdays), 'daily', or a day list; null if unreadable.
  */
 export function normalizeEvery(input: string): string | null {
     const tokens = input
@@ -184,8 +197,8 @@ export function normalizeEvery(input: string): string | null {
     if (!tokens.length) return null
     const days = new Set<number>()
     for (const tok of tokens) {
-        if (tok === 'daily' || tok === 'everyday' || tok === 'day') return ''
-        if (tok === 'weekdays') [1, 2, 3, 4, 5].forEach((d) => days.add(d))
+        if (tok === 'daily' || tok === 'everyday' || tok === 'day') return 'daily'
+        if (tok === 'weekdays') WEEKDAYS.forEach((d) => days.add(d))
         else if (tok === 'weekends') [6, 0].forEach((d) => days.add(d))
         else {
             const i = DAY_NAMES.findIndex((d) => tok.startsWith(d))
@@ -193,27 +206,24 @@ export function normalizeEvery(input: string): string | null {
             days.add(i)
         }
     }
-    if (days.size === 7) return ''
-    return WEEK.filter((d) => days.has(d))
-        .map((d) => DAY_NAMES[d])
-        .join(',')
+    return canonical(days)
 }
 
 /** Is a routine item scheduled on this weekday (Date#getDay index)? */
-export const onDay = (it: Item, day: number): boolean => !it.every || it.every.split(',').includes(DAY_NAMES[day])
+export const onDay = (it: Item, day: number): boolean => daySet(it.every).has(day)
 
 export function everyLabel(every: string | undefined): string {
-    if (!every) return 'Daily'
-    if (every === 'mon,tue,wed,thu,fri') return 'Weekdays'
+    if (!every) return 'Weekdays'
+    if (every === 'daily') return 'Daily'
     if (every === 'sat,sun') return 'Weekends'
     return every.split(',').map((d) => d[0].toUpperCase() + d.slice(1)).join(' ')
 }
 
-/** Flip one weekday in a schedule. Never leaves it empty. Returns undefined for daily. */
+/** Flip one weekday in a schedule. Never leaves it empty. Returns undefined for the default. */
 export function toggleDay(every: string | undefined, day: number): string | undefined {
-    const cur = new Set(every ? every.split(',').map((d) => DAY_NAMES.indexOf(d)) : WEEK)
+    const cur = daySet(every)
     if (cur.has(day)) cur.delete(day)
     else cur.add(day)
     if (cur.size === 0) return every
-    return normalizeEvery([...cur].map((d) => DAY_NAMES[d]).join(',')) || undefined
+    return canonical(cur) || undefined
 }

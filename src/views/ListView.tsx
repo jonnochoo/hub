@@ -8,11 +8,12 @@ import { promptDate, promptText } from '../lib/prompts'
 import { Chip, Empty, InlineField, NotesField, openFirstUrl, PageHeader, Rich, Row, useCursor } from '../components/ui'
 import { Elapsed } from '../components/Elapsed'
 
-const ADD_KIND: Record<ListKind, AddKind> = { tasks: 'task', routine: 'routine', learn: 'learn', questions: 'question', ideas: 'idea' }
-const SINGULAR: Record<ListKind, string> = { tasks: 'Task', routine: 'Routine item', learn: 'Thing to learn', questions: 'Question', ideas: 'Idea' }
+const ADD_KIND: Record<ListKind, AddKind> = { tasks: 'task', routine: 'routine', reminders: 'reminder', learn: 'learn', questions: 'question', ideas: 'idea' }
+const SINGULAR: Record<ListKind, string> = { tasks: 'Task', routine: 'Routine item', reminders: 'Post-it', learn: 'Thing to learn', questions: 'Question', ideas: 'Idea' }
 const EMPTY: Record<ListKind, string> = {
     tasks: 'No tasks. Quick things that sit outside your tickets go here.',
-    routine: 'No daily routine yet. Things you do every day (standup, check PRs, inbox zero) go here and show on Today.',
+    reminders: 'No post-its.',
+    routine: 'No daily routine yet. Things you do regularly (standup, check PRs, inbox zero) go here and show on Today on weekdays. Use every:daily to include weekends.',
     learn: 'Nothing to learn yet. Capture it when you stumble on it.',
     questions: 'No open questions. Write down what you do not understand yet; answer it in the notes later.',
     ideas: 'No ideas parked. Future work and "someday" thoughts go here.',
@@ -66,8 +67,8 @@ function ItemList({ kind }: { kind: ListKind }) {
         d: () => {
             if (!row) return
             if (kind === 'routine')
-                promptText('Repeats on', row.item.every ?? 'daily', (v) => s.patchItem(kind, row.id, { every: normalizeEvery(v) || undefined }), {
-                    hint: 'daily, weekdays, weekends, or mon,wed,fri',
+                promptText('Repeats on', row.item.every ?? 'weekdays', (v) => s.patchItem(kind, row.id, { every: normalizeEvery(v) || undefined }), {
+                    hint: 'weekdays (default), daily, weekends, or mon,wed,fri',
                     validate: (v) => (normalizeEvery(v) === null ? 'Try: daily, weekdays, weekends, or mon,wed,fri' : null),
                 })
             else promptDate('Due date', row.item.due, (v) => s.patchItem(kind, row.id, v ? { due: v } : { due: undefined }))
@@ -213,8 +214,8 @@ export function ItemDetail({ kind, index }: { kind: ListKind; index: number }) {
                         <InlineField
                             id="f-every"
                             label="Repeats (d)"
-                            value={it.every ?? 'daily'}
-                            placeholder="daily, weekdays, weekends, or mon,wed,fri"
+                            value={it.every ?? 'weekdays'}
+                            placeholder="weekdays (default), daily, weekends, or mon,wed,fri"
                             onCommit={(v) => {
                                 const n = normalizeEvery(v)
                                 if (n === null) s.toast(`Cannot read "${v}". Try daily, weekdays, or mon,wed,fri`)

@@ -18,7 +18,7 @@ import {
 } from './lib/model'
 
 export type ViewId = 'today' | 'tickets' | ListKind | 'daily'
-export type AddKind = 'task' | 'routine' | 'ticket' | 'learn' | 'question' | 'idea'
+export type AddKind = 'task' | 'routine' | 'reminder' | 'ticket' | 'learn' | 'question' | 'idea'
 
 export type Modal =
     | { type: 'add'; kind: AddKind; due?: string }
@@ -36,6 +36,7 @@ export type Modal =
 
 const LIST_HEADER: Record<ListKind, string> = {
     tasks: '# Tasks',
+    reminders: '# Post-its (max 2 show on Today; tick one to clear it)',
     routine: '# Daily routine (resets every day; done:DATE = last completed)',
     learn: '# Things to learn',
     questions: '# Questions',
@@ -45,6 +46,7 @@ const LIST_HEADER: Record<ListKind, string> = {
 export const ADD_TO_LIST: Record<Exclude<AddKind, 'ticket'>, ListKind> = {
     task: 'tasks',
     routine: 'routine',
+    reminder: 'reminders',
     learn: 'learn',
     question: 'questions',
     idea: 'ideas',
@@ -157,7 +159,7 @@ export const useStore = create<State>((set, get) => {
         ready: false,
         vaultPath: '',
         tickets: [],
-        lists: { tasks: [], routine: [], learn: [], questions: [], ideas: [] },
+        lists: { tasks: [], routine: [], reminders: [], learn: [], questions: [], ideas: [] },
         dailyDates: [],
         dailies: {},
         active: null,
@@ -213,6 +215,10 @@ export const useStore = create<State>((set, get) => {
 
         // ---- list items -----------------------------------------------------
         async addItem(kind, text, extra = {}) {
+            if (kind === 'reminders' && openPostits(get().lists.reminders) >= MAX_POSTITS) {
+                get().toast(`Only ${MAX_POSTITS} post-its. Clear one first (1 or 2 on Today)`)
+                return
+            }
             const lines = [...get().lists[kind], newItem(text, { added: today(), ...extra })]
             await saveList(kind, lines)
         },
@@ -420,6 +426,9 @@ export function parseTicketInput(input: string): { key: string; title: string; u
     return { key, title: rest || key || 'Untitled', url, planned: due ?? '', later }
 }
 
+export const MAX_POSTITS = 2
+export const openPostits = (lines: Line[]) => lines.filter((l) => l.item && !l.item.done).length
+
 export const isTicketActive = (a: Active | null, t: Ticket) => !!a && a.kind === 'ticket' && a.ref === t.file
 export { ticketLabel }
 
@@ -433,6 +442,7 @@ folder and reloads when files change.
 
 - \`tasks.md\`      quick tasks outside normal ticket work
 - \`routine.md\`    daily routine: recurring items shown on Today every day. \`done:DATE\` is the last day completed (done today = DATE is today); items are never ticked \`[x]\`
+- \`reminders.md\`  post-its: at most 2 open ones show on Today; tick one to clear it
 - \`learn.md\`      things to learn
 - \`questions.md\`  open questions (indented lines under an item are the answer/notes)
 - \`ideas.md\`      future tasks and ideas
@@ -449,7 +459,7 @@ folder and reloads when files change.
 \`\`\`
 
 - Tasks, learn and questions are either dated (\`due:\`), parked (\`@later\`), or neither = triage.
-- Routine items repeat daily unless they carry \`every:\`, e.g. \`every:mon,wed,fri\` (weekdays = mon..fri). They only show on Today on those days.
+- Routine items run on weekdays (mon..fri) by default. \`every:daily\` includes weekends; \`every:mon,wed,fri\` picks days. They only show on Today on those days.
 - \`!\` marks high priority, \`due:\` is the due date, \`added:\` / \`done:\` are bookkeeping dates (ISO).
 - Other lines (headings, prose) are preserved as-is.
 
