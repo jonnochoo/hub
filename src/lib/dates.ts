@@ -3,6 +3,22 @@ const pad = (n: number) => String(n).padStart(2, '0')
 export const iso = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 export const today = () => iso(new Date())
 export const hhmm = (d: Date) => `${pad(d.getHours())}:${pad(d.getMinutes())}`
+/** Local 'YYYY-MM-DD HH:MM', used for note created/updated stamps. */
+export const stamp = (d = new Date()) => `${iso(d)} ${hhmm(d)}`
+
+/** Display-only: rewrite 24h HH:MM stamps at the start of a log line as 12h (14:05 → 2:05pm, 09:00–10:30 → 9:00–10:30am). Files stay 24h. */
+export function logTime12(line: string): string {
+    const m = /^(\d{2}):(\d{2})(?:–(\d{2}):(\d{2}))?/.exec(line)
+    if (!m) return line
+    const part = (h: number, mm: string) => ({ t: `${h % 12 || 12}:${mm}`, ap: h < 12 ? 'am' : 'pm' })
+    const a = part(Number(m[1]), m[2])
+    let out = `${a.t}${a.ap}`
+    if (m[3]) {
+        const b = part(Number(m[3]), m[4])
+        out = a.ap === b.ap ? `${a.t}–${b.t}${b.ap}` : `${a.t}${a.ap}–${b.t}${b.ap}`
+    }
+    return out + line.slice(m[0].length)
+}
 
 export function fromIso(s: string): Date {
     const [y, m, d] = s.split('-').map(Number)

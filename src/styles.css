@@ -165,6 +165,25 @@ kbd {
     align-items: center;
     gap: 9px;
 }
+.nav-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.nav-count {
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    min-width: 18px;
+    text-align: center;
+    padding: 0 6px;
+    border-radius: 9px;
+    background: var(--raised);
+    color: var(--text);
+}
+.nav.on .nav-count {
+    background: var(--accent);
+    color: var(--bg, #fff);
+}
 .icon {
     flex: none;
     opacity: 0.85;
@@ -341,6 +360,13 @@ h3 {
 h3.group {
     margin-top: 18px;
 }
+h4.group.sub {
+    margin: 10px 0 4px 4px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+}
 .empty {
     color: var(--muted);
     padding: 24px 4px;
@@ -360,6 +386,9 @@ h3.group {
     border: 1px solid transparent;
     cursor: default;
     min-height: 34px;
+}
+.row.clickable {
+    cursor: pointer;
 }
 .row:hover {
     background: color-mix(in srgb, var(--raised) 60%, transparent);
@@ -435,6 +464,10 @@ h3.group {
 }
 .dot.review {
     background: var(--accent);
+}
+.dot.ready-to-deploy {
+    background: var(--ok);
+    opacity: 0.6;
 }
 .dot.done {
     background: var(--ok);
@@ -769,10 +802,13 @@ h3.group {
 .row.t-routine {
     border-left: 3px solid var(--c-routine);
 }
-/* Keep chips next to the title instead of flung to the far edge. */
+/* The title block takes the free space so the status / date chips sit at the right edge. */
 .title-block.tight {
-    flex: 0 1 auto;
-    max-width: 52%;
+    flex: 1 1 0;
+    min-width: 0;
+}
+.row .chip {
+    flex: none;
 }
 .title-block.tight .title {
     flex: none;
@@ -795,6 +831,10 @@ h3.group {
 .chip.s-review {
     color: var(--accent);
     border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+}
+.chip.s-ready-to-deploy {
+    color: var(--ok);
+    border-color: color-mix(in srgb, var(--ok) 55%, transparent);
 }
 .chip.s-done {
     color: var(--ok);
@@ -1158,4 +1198,27 @@ main:has(.page.today) {
 }
 *:hover {
     scrollbar-color: color-mix(in srgb, var(--muted) 55%, var(--border)) transparent;
+}
+
+/* ---- ticket notes ------------------------------------------------------ */
+.note-entry {
+    margin-top: 12px;
+}
+.note-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    margin: 0 0 3px 4px;
+}
+.note-x {
+    margin-left: auto;
+    background: none;
+    border: 0;
+    color: inherit;
+    opacity: 0.4;
+    cursor: pointer;
+}
+.note-x:hover {
+    opacity: 1;
 }

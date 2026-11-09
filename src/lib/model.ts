@@ -1,7 +1,41 @@
 import { parseDoc, parseList, serializeDoc, serializeList, splitSection, stripHeadings, slug, type Line } from './md'
 import { today } from './dates'
 
-export const STATUSES = ['todo', 'in-progress', 'blocked', 'review', 'done'] as const
+/** A ticket note, oldest first. Stamps are local 'YYYY-MM-DD HH:MM' ('' for a legacy note with no stamp). */
+export interface TicketNote {
+    created: string
+    updated: string
+    text: string
+}
+
+const STAMP = '\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}'
+const NOTE_HEAD = new RegExp(`^### (${STAMP})(?: · updated (${STAMP}))?\\s*$`)
+
+/** `### created · updated stamp` headings split the Notes section. Text before the first heading is a legacy, unstamped note. */
+export function parseNotes(src: string): TicketNote[] {
+    const notes: TicketNote[] = []
+    let cur: TicketNote = { created: '', updated: '', text: '' }
+    const flush = () => {
+        if (cur.text.trim()) notes.push({ ...cur, text: cur.text.trim() })
+    }
+    for (const line of src.split('\n')) {
+        const m = NOTE_HEAD.exec(line)
+        if (m) {
+            flush()
+            cur = { created: m[1], updated: m[2] ?? m[1], text: '' }
+        } else cur.text += line + '\n'
+    }
+    flush()
+    return notes
+}
+
+export function serializeNotes(notes: TicketNote[]): string {
+    return notes
+        .map((n) => (n.created ? `### ${n.created}${n.updated && n.updated !== n.created ? ` · updated ${n.updated}` : ''}\n${n.text}` : n.text))
+        .join('\n\n')
+}
+
+export const STATUSES = ['todo', 'in-progress', 'blocked', 'review', 'ready-to-deploy', 'done'] as const
 export type Status = (typeof STATUSES)[number]
 
 export interface Ticket {
@@ -13,14 +47,15 @@ export interface Ticket {
     created: string
     updated: string
     planned: string // the day I intend to work on it ('' = none)
-    later: boolean // parked. No planned date and not later = triage
+    later: boolean // parked. No planned date and not later = active (always on Today)
     spent: number // minutes clocked
     subtasks: Line[]
-    notes: string
+    next: string // what to do next; shown on Today
+    notes: TicketNote[]
     extra: Record<string, string> // unknown frontmatter, preserved for agents/humans
 }
 
-const KNOWN = ['key', 'title', 'url', 'status', 'created', 'updated', 'planned', 'later', 'spent']
+const KNOWN = ['key', 'title', 'url', 'status', 'created', 'updated', 'planned', 'later', 'spent', 'next']
 
 export function parseTicket(file: string, src: string): Ticket {
     const { fm, body } = parseDoc(src)
@@ -41,7 +76,8 @@ export function parseTicket(file: string, src: string): Ticket {
         later: fm.later === 'true' || fm.planned === 'later',
         spent: Number(fm.spent) || 0,
         subtasks: parseList(sub.lines.join('\n')),
-        notes: stripHeadings(sub.rest),
+        next: fm.next ?? '',
+        notes: parseNotes(stripHeadings(sub.rest)),
         extra,
     }
 }
@@ -57,10 +93,11 @@ export function serializeTicket(t: Ticket): string {
         planned: t.planned,
         later: t.later ? 'true' : '',
         spent: t.spent ? String(t.spent) : '',
+        next: t.next,
         ...t.extra,
     }
     const subs = t.subtasks.length ? serializeList(t.subtasks).trimEnd() : ''
-    const body = [`# ${t.key ? `${t.key} ` : ''}${t.title}`, '', '## Subtasks', subs, '', '## Notes', t.notes].join('\n')
+    const body = [`# ${t.key ? `${t.key} ` : ''}${t.title}`, '', '## Subtasks', subs, '', '## Notes', serializeNotes(t.notes)].join('\n')
     return serializeDoc(fm, body)
 }
 
@@ -114,5 +151,9 @@ export const LIST_TITLE: Record<ListKind, string> = {
     ideas: 'Future & ideas',
 }
 
-export type When = 'triage' | 'later' | 'date'
-export const ticketWhen = (t: Ticket): When => (t.planned ? 'date' : t.later ? 'later' : 'triage')
+/** Kinds where every open item is either dated, parked (@later) or Active (no date: always on Today). */
+export const DATED_KINDS: ListKind[] = ['tasks', 'learn', 'questions']
+
+/** Tickets: later = parked, date = on Today from that day, active = always on Today until done. */
+export type When = 'later' | 'active' | 'date'
+export const ticketWhen = (t: Ticket): When => (t.planned ? 'date' : t.later ? 'later' : 'active')

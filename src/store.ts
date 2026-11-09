@@ -226,11 +226,9 @@ export const useStore = create<State>((set, get) => {
         async patchItem(kind, id, patch) {
             const lines = mapItem(get().lists[kind], id, (it) => {
                 const next = { ...it, ...patch }
-                // A date and "later" are mutually exclusive; neither means triage.
+                // A date and "later" are mutually exclusive; neither means Active (always on Today).
                 if (patch.due) next.later = undefined
                 if (patch.later) next.due = undefined
-                // Triage is only a starting state: clearing a date parks the item as Later.
-                if (['tasks', 'learn', 'questions'].includes(kind) && (it.due || it.later) && !next.due && !next.later) next.later = true
                 return next
             })
             await saveList(kind, lines)
@@ -272,7 +270,8 @@ export const useStore = create<State>((set, get) => {
                 later: !!later && !planned,
                 spent: 0,
                 subtasks: [],
-                notes: '',
+                next: '',
+                notes: [],
                 extra: {},
             }
             set((s) => ({ tickets: [...s.tickets, t] }))
@@ -284,10 +283,10 @@ export const useStore = create<State>((set, get) => {
             const t = get().tickets.find((x) => x.file === file)
             if (!t) return
             const next = { ...t, ...patch }
-            // A date and "later" are mutually exclusive; triage is only a starting state.
+            // A date and "later" are mutually exclusive.
             if (patch.planned) next.later = false
             if (patch.later) next.planned = ''
-            if ((t.planned || t.later) && !next.planned && !next.later) next.later = true
+            // Clearing both leaves the ticket Active (always on Today).
             await saveTicket(next)
         },
 
@@ -295,7 +294,9 @@ export const useStore = create<State>((set, get) => {
             const t = get().tickets.find((x) => x.file === file)
             if (!t || t.status === status) return
             if (status === 'done' && get().active?.ref === file) await get().stopWork()
-            await saveTicket({ ...t, status })
+            // Working on it (any status but todo/done) makes it Active: always on Today.
+            const active = status !== 'todo' && status !== 'done'
+            await saveTicket({ ...t, status, planned: active ? '' : t.planned, later: active ? false : t.later })
             await get().appendLog(`- ${hhmm(new Date())} ${status === 'done' ? '✓ ' : ''}[[${t.key || t.title}]] → ${status}`)
         },
 
@@ -458,18 +459,19 @@ folder and reloads when files change.
   indented lines are notes for the item above
 \`\`\`
 
-- Tasks, learn and questions are either dated (\`due:\`), parked (\`@later\`), or neither = triage.
+- Tasks, learn and questions are either dated (\`due:\`, on Today from that day) or parked (\`@later\`). With neither the item is Active: always on Today until done.
 - Routine items run on weekdays (mon..fri) by default. \`every:daily\` includes weekends; \`every:mon,wed,fri\` picks days. They only show on Today on those days.
 - \`!\` marks high priority, \`due:\` is the due date, \`added:\` / \`done:\` are bookkeeping dates (ISO).
 - Other lines (headings, prose) are preserved as-is.
 
 ## Tickets
 
-Frontmatter: \`key\`, \`title\`, \`url\`, \`status\` (todo | in-progress | blocked | review | done),
+Frontmatter: \`key\`, \`title\`, \`url\`, \`status\` (todo | in-progress | blocked | review | ready-to-deploy | done),
 \`created\`, \`updated\`, \`planned\` (the day I intend to work on it), \`later: true\` (parked), \`spent\` (minutes clocked).
-Planning (\`planned\` / \`later\`) only applies to \`todo\` tickets; with neither set a todo ticket is in triage.
-Tickets that are in-progress, blocked or review always show on Today until done.
-Body: \`## Subtasks\` checklist, then \`## Notes\`.
+With neither \`planned\` nor \`later\` set the ticket is Active: always on Today until done. \`planned\` shows it on Today from that day; \`later\` parks it.
+Moving a ticket to in-progress, blocked, review or ready-to-deploy makes it Active.
+\`next:\` is a one-line "what's next" shown on Today.
+Body: \`## Subtasks\` checklist, then \`## Notes\`. Each note starts with a \`### YYYY-MM-DD HH:MM\` heading (created), with \` · updated YYYY-MM-DD HH:MM\` appended once edited; text before the first heading is an older unstamped note.
 
 ## Daily log lines
 

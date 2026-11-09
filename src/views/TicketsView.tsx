@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { useStore } from '../store'
-import { addDays, fmtDate, fmtMins, parseDate, today } from '../lib/dates'
+import { addDays, fmtDate, fmtMins, logTime12, parseDate, stamp, today } from '../lib/dates'
 import { itemsOf, mapItem, newItem } from '../lib/md'
 import { STATUSES, ticketLabel, ticketWhen, type Status, type Ticket, type When } from '../lib/model'
 import { useHotkeys } from '../lib/hotkeys'
@@ -9,16 +9,15 @@ import { openUrl } from '../lib/fs'
 import { AddInput, Chip, Empty, InlineField, NotesField, PageHeader, Row, useCursor } from '../components/ui'
 import { Elapsed } from '../components/Elapsed'
 
-const ORDER: Status[] = ['in-progress', 'blocked', 'review', 'todo', 'done']
-type Group = When | 'active' | 'done'
+const ORDER: Status[] = ['in-progress', 'blocked', 'review', 'ready-to-deploy', 'todo', 'done']
+type Group = When | 'done'
 const GROUPS: { id: Group; label: string; hint?: string }[] = [
-    { id: 'active', label: 'Active', hint: 'in progress, blocked or in review: always on Today' },
-    { id: 'triage', label: 'Triage', hint: 'todo: decide with l for later, or d to plan a date' },
     { id: 'later', label: 'Later' },
-    { id: 'date', label: 'Planned' },
+    { id: 'active', label: 'Active', hint: 'always on Today until done' },
+    { id: 'date', label: 'Date', hint: 'on Today from its date' },
     { id: 'done', label: 'Done' },
 ]
-const groupOf = (t: Ticket): Group => (t.status === 'done' ? 'done' : t.status !== 'todo' ? 'active' : ticketWhen(t))
+const groupOf = (t: Ticket): Group => (t.status === 'done' ? 'done' : ticketWhen(t))
 
 export const TicketsView = () => <TicketList />
 
@@ -29,7 +28,7 @@ function TicketList() {
 
     const list = useMemo(() => {
         return s.tickets
-            .filter((x) => (s.showDone || x.status !== 'done') && (!q || `${x.key} ${x.title} ${x.notes}`.toLowerCase().includes(q)))
+            .filter((x) => (s.showDone || x.status !== 'done') && (!q || `${x.key} ${x.title} ${x.next} ${x.notes.map((n) => n.text).join(' ')}`.toLowerCase().includes(q)))
             .sort(
                 (a, b) =>
                     GROUPS.findIndex((g) => g.id === groupOf(a)) - GROUPS.findIndex((g) => g.id === groupOf(b)) ||
@@ -42,17 +41,27 @@ function TicketList() {
     const { cur, setC, nav } = useCursor(list.length)
     const tk = list[cur]
     const setStatus = (st: Status) => tk && void s.setStatus(tk.file, st)
-    const canPlan = (x: Ticket) => x.status === 'todo' || (s.toast('Only todo tickets are planned; others are always on Today'), false)
 
     useHotkeys({
         ...nav,
         Enter: () => tk && s.setOpenTicket(tk.file),
-        l: () => tk && canPlan(tk) && void s.patchTicket(tk.file, { later: true }),
+        n: () => {
+            if (!tk) return
+            s.setOpenTicket(tk.file)
+            setTimeout(() => document.getElementById('notes-new-view')?.click(), 50)
+        },
+        e: () => {
+            if (!tk) return
+            s.setOpenTicket(tk.file)
+            setTimeout(() => document.getElementById('f-title')?.focus(), 50)
+        },
+        l: () => tk && void s.patchTicket(tk.file, { later: true }),
+        f: () => tk && void s.patchTicket(tk.file, { later: false, planned: '' }),
         o: () => tk?.url && void openUrl(tk.url),
         s: () => tk && void s.startWork({ kind: 'ticket', ref: tk.file, label: ticketLabel(tk) }),
-        t: () => tk && canPlan(tk) && void s.patchTicket(tk.file, { planned: t }).then(() => s.toast('Planned for today')),
-        p: () => tk && canPlan(tk) && void s.patchTicket(tk.file, { planned: addDays(tk.planned > t ? tk.planned : t, 1) }),
-        d: () => tk && canPlan(tk) && promptDate('Plan ticket for', tk.planned, (v) => s.patchTicket(tk.file, { planned: v })),
+        t: () => tk && void s.patchTicket(tk.file, { planned: t }).then(() => s.toast('Planned for today')),
+        p: () => tk && void s.patchTicket(tk.file, { planned: addDays(tk.planned > t ? tk.planned : t, 1) }),
+        d: () => tk && promptDate('Plan ticket for', tk.planned, (v) => s.patchTicket(tk.file, { planned: v })),
         c: () => setStatus('done'),
         H: s.toggleShowDone,
         '#': () => {
@@ -116,7 +125,6 @@ export function TicketDetail({ file }: { file: string }) {
     const t = today()
     const working = s.active?.kind === 'ticket' && s.active.ref === tk.file
     const when = ticketWhen(tk)
-    const canPlan = () => tk.status === 'todo' || (s.toast('Only todo tickets are planned; others are always on Today'), false)
 
     useHotkeys({
         ...nav,
@@ -129,14 +137,15 @@ export function TicketDetail({ file }: { file: string }) {
         '#': () => sub && void s.editSubtasks(file, (ls) => ls.filter((l) => l.id !== sub.id)),
         e: () => document.getElementById('f-title')?.focus(),
         u: () => document.getElementById('f-url')?.focus(),
-        n: () => document.getElementById('notes-detail-view')?.click(),
+        n: () => document.getElementById('notes-new-view')?.click(),
+        w: () => document.getElementById('f-next')?.focus(),
         o: () => tk.url && void openUrl(tk.url),
         s: () => (working ? void s.stopWork() : void s.startWork({ kind: 'ticket', ref: tk.file, label: ticketLabel(tk) })),
-        t: () => canPlan() && void s.patchTicket(file, { planned: t }).then(() => s.toast('Planned for today')),
-        l: () => canPlan() && void s.patchTicket(file, { later: true }),
-        p: () => canPlan() && void s.patchTicket(file, { planned: addDays(tk.planned > t ? tk.planned : t, 1) }),
+        t: () => void s.patchTicket(file, { planned: t }).then(() => s.toast('Planned for today')),
+        l: () => void s.patchTicket(file, { later: true }),
+        f: () => void s.patchTicket(file, { later: false, planned: '' }),
+        p: () => void s.patchTicket(file, { planned: addDays(tk.planned > t ? tk.planned : t, 1) }),
         d: () => {
-            if (!canPlan()) return
             if (!tk.planned) void s.patchTicket(file, { planned: t })
             setTimeout(() => document.getElementById('f-plan')?.focus(), 50)
         },
@@ -162,8 +171,9 @@ export function TicketDetail({ file }: { file: string }) {
                         Open <kbd>o</kbd>
                     </button>
                 </InlineField>
+                <InlineField id="f-next" label="Next (w)" value={tk.next} placeholder="What is the next step? Shown on Today" onCommit={(v) => void s.patchTicket(file, { next: v.trim() })} />
                 <div className="ifield">
-                    <span className="ifield-label">Status (1–5)</span>
+                    <span className="ifield-label">Status (1–6)</span>
                     <div className="statuses">
                         {STATUSES.map((st, i) => (
                             <button key={st} className={`status-btn ${st}${tk.status === st ? ' on' : ''}`} onClick={() => void s.setStatus(file, st)}>
@@ -172,23 +182,17 @@ export function TicketDetail({ file }: { file: string }) {
                         ))}
                     </div>
                 </div>
-                {tk.status !== 'todo' ? (
-                    <div className="ifield">
-                        <span className="ifield-label">When</span>
-                        <span className="muted">Always on Today while {tk.status}. Planning applies to todo tickets.</span>
-                        {tk.spent > 0 && <Chip>{fmtMins(tk.spent)} clocked</Chip>}
-                    </div>
-                ) : (
-                    <>
                 <div className="ifield">
                     <span className="ifield-label">When</span>
                     <div className="seg">
-                        {when === 'triage' && <span className="status-btn triage on">Triage: choose one</span>}
                         <button className={`status-btn${when === 'later' ? ' on' : ''}`} onClick={() => void s.patchTicket(file, { later: true })}>
                             Later <kbd>l</kbd>
                         </button>
-                        <button className={`status-btn${when === 'date' ? ' on' : ''}`} onClick={() => !tk.planned && void s.patchTicket(file, { planned: t })}>
-                            Plan for a date <kbd>d</kbd>
+                        <button className={`status-btn${when === 'active' ? ' on' : ''}`} onClick={() => void s.patchTicket(file, { later: false, planned: '' })} title="Always on Today until done">
+                            Active <kbd>f</kbd>
+                        </button>
+                        <button className={`status-btn${when === 'date' ? ' on' : ''}`} onClick={() => !tk.planned && void s.patchTicket(file, { planned: t })} title="On Today from that date">
+                            Date <kbd>d</kbd>
                         </button>
                         {tk.spent > 0 && <Chip>{fmtMins(tk.spent)} clocked</Chip>}
                     </div>
@@ -196,9 +200,9 @@ export function TicketDetail({ file }: { file: string }) {
                 {when === 'date' && (
                     <InlineField
                         id="f-plan"
-                        label="Planned for"
+                        label="Date"
                         value={tk.planned}
-                        placeholder="today, tom, mon, +3, 25 dec · empty moves to Later"
+                        placeholder="today, tom, mon, +3, 25 dec · empty makes it Active"
                         onCommit={(v) => {
                             if (!v) return void s.patchTicket(file, { planned: '' })
                             const d = parseDate(v)
@@ -208,8 +212,6 @@ export function TicketDetail({ file }: { file: string }) {
                     >
                         <Chip tone={tk.planned < t ? 'warn' : 'accent'}>{fmtDate(tk.planned)}</Chip>
                     </InlineField>
-                )}
-                    </>
                 )}
             </div>
 
@@ -229,9 +231,44 @@ export function TicketDetail({ file }: { file: string }) {
             <AddInput id="f-sub" placeholder="+ Add subtask (a)" onAdd={(v) => s.editSubtasks(file, (ls) => [...ls, newItem(v)])} />
 
             <h3 className="group">
-                Notes <span className="muted">(n to edit, markdown)</span>
+                Notes <span className="muted">(n for a new note, markdown)</span>
             </h3>
-            <NotesField id="notes-detail" value={tk.notes} placeholder="No notes. Click or press n to add some." onCommit={(v) => void s.patchTicket(file, { notes: v })} />
+            <NotesField
+                id="notes-new"
+                value=""
+                placeholder="+ New note (n)"
+                onCommit={(v) => v.trim() && void s.patchTicket(file, { notes: [...tk.notes, { created: stamp(), updated: stamp(), text: v.trim() }] })}
+            />
+            {tk.notes
+                .map((n, i) => ({ n, i }))
+                .reverse()
+                .map(({ n, i }) => (
+                    <div key={i} className="note-entry">
+                        <div className="note-meta muted">
+                            {n.created ? `${fmtDate(n.created.slice(0, 10))} ${logTime12(n.created.slice(11))}` : 'Earlier note'}
+                            {n.created && n.updated !== n.created && ` · updated ${fmtDate(n.updated.slice(0, 10))} ${logTime12(n.updated.slice(11))}`}
+                            <button
+                                className="note-x"
+                                title="Delete note"
+                                onClick={() => confirm('Delete this note?') && void s.patchTicket(file, { notes: tk.notes.filter((_, j) => j !== i) })}
+                            >
+                                ✕
+                            </button>
+                        </div>
+                        <NotesField
+                            id={`note-${i}`}
+                            value={n.text}
+                            placeholder=""
+                            onCommit={(v) =>
+                                void s.patchTicket(file, {
+                                    notes: v.trim()
+                                        ? tk.notes.map((x, j) => (j === i ? { ...x, text: v.trim(), updated: x.created ? stamp() : '' } : x))
+                                        : tk.notes.filter((_, j) => j !== i),
+                                })
+                            }
+                        />
+                    </div>
+                ))}
             <p className="muted foot">
                 <kbd>1</kbd>–<kbd>5</kbd> status · <kbd>s</kbd> clock in/out · <kbd>Esc</kbd> back · <kbd>?</kbd> all keys
             </p>
