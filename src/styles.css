@@ -802,10 +802,13 @@ h4.group.sub {
 .row.t-routine {
     border-left: 3px solid var(--c-routine);
 }
-/* Keep chips next to the title instead of flung to the far edge. */
+/* The title block takes the free space so the status / date chips sit at the right edge. */
 .title-block.tight {
-    flex: 0 1 auto;
-    max-width: 52%;
+    flex: 1 1 0;
+    min-width: 0;
+}
+.row .chip {
+    flex: none;
 }
 .title-block.tight .title {
     flex: none;

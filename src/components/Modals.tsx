@@ -6,7 +6,7 @@ import { ADD_TO_LIST, MAX_POSTITS, openPostits, parseCapture, parseTicketInput, 
 import { setTheme, THEMES, getTheme } from '../theme'
 
 const KINDS: { kind: AddKind; label: string; hint: string }[] = [
-    { kind: 'task', label: 'Task', hint: 'Reply to Bob ^tom !   (^date or ^later; no date = today; ! = priority)' },
+    { kind: 'task', label: 'Task', hint: 'Reply to Bob ^tom !   (^date or ^later; no date = active, always on Today; ! = priority)' },
     { kind: 'reminder', label: 'Post-it', hint: 'Call the bank before 3pm   (max 2, shown on Today)' },
     { kind: 'routine', label: 'Daily', hint: 'Check PRs   (weekdays by default; every:daily, every:mon,wed,fri)' },
     { kind: 'ticket', label: 'Ticket', hint: 'ABC-123 Fix login https://jira…/ABC-123   (^date or ^later; none = active, always on Today)' },
@@ -219,10 +219,12 @@ export const SHORTCUTS: { group: string; keys: [string, string][] }[] = [
             ['c', 'Complete / reopen'],
             ['e', 'Open the item page with the name focused for editing (Enter opens it too)'],
             ['n', 'Edit notes of the highlighted item (opens its page); on an item page, edit its notes'],
-            ['N', '(Today) edit the day\'s notes; (ticket page) edit its Next line'],
+            ['i', '(Today) edit the day\'s notes'],
+            ['w', '(ticket page) edit its Next line'],
             ['d', 'Set due / plan date  (today, tom, mon, +3, +2w, 25 dec)'],
             ['t', 'Plan for today'],
-            ['l', 'Park as Later (tasks, learn, questions). No date = due today'],
+            ['l', 'Park as Later (tasks, learn, questions)'],
+            ['f', 'Active: always on Today until done (no date). Same When system as tickets'],
             ['p', 'Postpone a day'],
             ['!', 'Toggle priority'],
             ['o', 'Open first link'],
@@ -235,7 +237,7 @@ export const SHORTCUTS: { group: string; keys: [string, string][] }[] = [
         group: 'Tickets',
         keys: [
             ['1 – 6', 'Status (Tickets and Today): todo / in-progress / blocked / review / ready-to-deploy / done'],
-            ['l / A / d / t', 'Ticket When: Later, Active (always on Today), pick a date, date = today. New tickets start Active; starting work or moving to in-progress / blocked / review / ready-to-deploy makes a ticket Active'],
+            ['l / f / d / t', 'Ticket When: Later, f = Focus (Active, always on Today), pick a date, date = today. New tickets start Active; starting work or moving to in-progress / blocked / review / ready-to-deploy makes a ticket Active'],
             ['Enter', 'Open ticket'],
             ['Esc', 'Back to list'],
             ['x', '(in a ticket) tick subtask'],

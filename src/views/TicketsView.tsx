@@ -56,7 +56,7 @@ function TicketList() {
             setTimeout(() => document.getElementById('f-title')?.focus(), 50)
         },
         l: () => tk && void s.patchTicket(tk.file, { later: true }),
-        A: () => tk && void s.patchTicket(tk.file, { later: false, planned: '' }),
+        f: () => tk && void s.patchTicket(tk.file, { later: false, planned: '' }),
         o: () => tk?.url && void openUrl(tk.url),
         s: () => tk && void s.startWork({ kind: 'ticket', ref: tk.file, label: ticketLabel(tk) }),
         t: () => tk && void s.patchTicket(tk.file, { planned: t }).then(() => s.toast('Planned for today')),
@@ -138,12 +138,12 @@ export function TicketDetail({ file }: { file: string }) {
         e: () => document.getElementById('f-title')?.focus(),
         u: () => document.getElementById('f-url')?.focus(),
         n: () => document.getElementById('notes-new-view')?.click(),
-        N: () => document.getElementById('f-next')?.focus(),
+        w: () => document.getElementById('f-next')?.focus(),
         o: () => tk.url && void openUrl(tk.url),
         s: () => (working ? void s.stopWork() : void s.startWork({ kind: 'ticket', ref: tk.file, label: ticketLabel(tk) })),
         t: () => void s.patchTicket(file, { planned: t }).then(() => s.toast('Planned for today')),
         l: () => void s.patchTicket(file, { later: true }),
-        A: () => void s.patchTicket(file, { later: false, planned: '' }),
+        f: () => void s.patchTicket(file, { later: false, planned: '' }),
         p: () => void s.patchTicket(file, { planned: addDays(tk.planned > t ? tk.planned : t, 1) }),
         d: () => {
             if (!tk.planned) void s.patchTicket(file, { planned: t })
@@ -171,7 +171,7 @@ export function TicketDetail({ file }: { file: string }) {
                         Open <kbd>o</kbd>
                     </button>
                 </InlineField>
-                <InlineField id="f-next" label="Next (N)" value={tk.next} placeholder="What is the next step? Shown on Today" onCommit={(v) => void s.patchTicket(file, { next: v.trim() })} />
+                <InlineField id="f-next" label="Next (w)" value={tk.next} placeholder="What is the next step? Shown on Today" onCommit={(v) => void s.patchTicket(file, { next: v.trim() })} />
                 <div className="ifield">
                     <span className="ifield-label">Status (1–6)</span>
                     <div className="statuses">
@@ -189,7 +189,7 @@ export function TicketDetail({ file }: { file: string }) {
                             Later <kbd>l</kbd>
                         </button>
                         <button className={`status-btn${when === 'active' ? ' on' : ''}`} onClick={() => void s.patchTicket(file, { later: false, planned: '' })} title="Always on Today until done">
-                            Active <kbd>A</kbd>
+                            Active <kbd>f</kbd>
                         </button>
                         <button className={`status-btn${when === 'date' ? ' on' : ''}`} onClick={() => !tk.planned && void s.patchTicket(file, { planned: t })} title="On Today from that date">
                             Date <kbd>d</kbd>

@@ -151,7 +151,7 @@ export const LIST_TITLE: Record<ListKind, string> = {
     ideas: 'Future & ideas',
 }
 
-/** Kinds where every open item is either dated or parked (@later). No date = today. */
+/** Kinds where every open item is either dated, parked (@later) or Active (no date: always on Today). */
 export const DATED_KINDS: ListKind[] = ['tasks', 'learn', 'questions']
 
 /** Tickets: later = parked, date = on Today from that day, active = always on Today until done. */

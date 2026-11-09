@@ -58,7 +58,7 @@ export function TodayView() {
             if (!tk.later && (!tk.planned || tk.planned <= t)) focus.push({ kind: 'ticket', key: tk.file, t: tk, date: tk.planned || t })
         }
         for (const l of s.lists.tasks)
-            if (l.item && !l.item.done && l.item.due && l.item.due <= t) focus.push({ kind: 'item', list: 'tasks', key: l.id, id: l.id, item: l.item, date: l.item.due })
+            if (l.item && !l.item.done && !l.item.later && (!l.item.due || l.item.due <= t)) focus.push({ kind: 'item', list: 'tasks', key: l.id, id: l.id, item: l.item, date: l.item.due || t })
         const weight = (r: TRow) => (r.kind === 'item' && r.item.pri ? 0 : 1)
         focus.sort(
             (a, b) =>
@@ -67,8 +67,8 @@ export function TodayView() {
 
         const dueOf = (list: 'questions' | 'learn'): TRow[] =>
             s.lists[list]
-                .filter((l) => l.item && !l.item.done && l.item.due && l.item.due <= t)
-                .map((l) => ({ kind: 'item', list, key: l.id, id: l.id, item: l.item!, date: l.item!.due! }) as TRow)
+                .filter((l) => l.item && !l.item.done && !l.item.later && (!l.item.due || l.item.due <= t))
+                .map((l) => ({ kind: 'item', list, key: l.id, id: l.id, item: l.item!, date: l.item!.due || t }) as TRow)
                 .sort((a, b) => a.date.localeCompare(b.date))
 
         return [...routine, ...focus, ...dueOf('questions'), ...dueOf('learn')]
@@ -109,6 +109,12 @@ export function TodayView() {
             } else void s.patchItem(row.list, row.id, { later: true })
             s.toast('Moved to Later')
         },
+        f: () => {
+            if (!row || (row.kind === 'item' && row.list === 'routine')) return
+            if (row.kind === 'ticket') void s.patchTicket(row.t.file, { later: false, planned: '' })
+            else void s.patchItem(row.list, row.id, { later: undefined, due: undefined })
+            s.toast('Active: always on Today')
+        },
         t: () => {
             if (!row || (row.kind === 'item' && row.list === 'routine')) return
             if (row.kind === 'ticket') {
@@ -146,14 +152,14 @@ export function TodayView() {
             else promptDate('Due date', row.item.due, (v) => s.patchItem(row.list, row.id, { due: v || undefined }))
         },
         '!': () => row?.kind === 'item' && row.list !== 'routine' && void s.patchItem(row.list, row.id, { pri: !row.item.pri }),
-        // n: notes of the highlighted row (opens its page, editing notes). N: Today's daily notes.
+        // n: notes of the highlighted row (opens its page, editing notes). i: Today's daily notes.
         n: () => {
             if (!row) return document.getElementById('notes-today-view')?.click()
             if (row.kind === 'ticket') s.setOpenTicket(row.t.file)
             else s.openItemById(row.list, row.id)
             setTimeout(() => document.getElementById(row.kind === 'ticket' ? 'notes-new-view' : 'notes-detail-view')?.click(), 50)
         },
-        N: () => document.getElementById('notes-today-view')?.click(),
+        i: () => document.getElementById('notes-today-view')?.click(),
         m: () => s.setModal({ type: 'add', kind: 'reminder' }),
         // On a highlighted ticket, 1-6 set its status (same keys as the Tickets view).
         // Otherwise 1 and 2 clear the first two post-its.
@@ -277,7 +283,7 @@ export function TodayView() {
                 {/* ---- notes ----------------------------------------------- */}
                 <div className="col col-notes">
                     <h2 className="col-title">
-                        Notes <span className="muted">(N)</span>
+                        Notes <span className="muted">(i)</span>
                     </h2>
                     <TodayNotes date={t} />
                 </div>

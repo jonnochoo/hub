@@ -3,7 +3,6 @@ import { vault } from './lib/fs'
 import { hhmm, iso, parseDate, today } from './lib/dates'
 import { mapItem, newItem, parseList, serializeList, type Item, type Line } from './lib/md'
 import {
-    DATED_KINDS,
     LIST_KINDS,
     parseDaily,
     parseTicket,
@@ -125,9 +124,6 @@ export const useStore = create<State>((set, get) => {
         for (const k of LIST_KINDS) {
             const src = await vault.read(`${k}.md`)
             lists[k] = src === null ? parseList(LIST_HEADER[k]) : parseList(src)
-            // No triage: an open item with no date and not parked lands on Today.
-            if (DATED_KINDS.includes(k))
-                lists[k] = lists[k].map((l) => (l.item && !l.item.done && !l.item.due && !l.item.later ? { ...l, item: { ...l.item, due: today() } } : l))
         }
 
         const tickets: Ticket[] = []
@@ -223,19 +219,16 @@ export const useStore = create<State>((set, get) => {
                 get().toast(`Only ${MAX_POSTITS} post-its. Clear one first (1 or 2 on Today)`)
                 return
             }
-            const dated = DATED_KINDS.includes(kind) && !extra.due && !extra.later ? { due: today() } : {}
-            const lines = [...get().lists[kind], newItem(text, { added: today(), ...dated, ...extra })]
+            const lines = [...get().lists[kind], newItem(text, { added: today(), ...extra })]
             await saveList(kind, lines)
         },
 
         async patchItem(kind, id, patch) {
             const lines = mapItem(get().lists[kind], id, (it) => {
                 const next = { ...it, ...patch }
-                // A date and "later" are mutually exclusive; neither means today.
+                // A date and "later" are mutually exclusive; neither means Active (always on Today).
                 if (patch.due) next.later = undefined
                 if (patch.later) next.due = undefined
-                // Clearing a date parks the item as Later.
-                if (DATED_KINDS.includes(kind) && (it.due || it.later) && !next.due && !next.later) next.later = true
                 return next
             })
             await saveList(kind, lines)
@@ -466,7 +459,7 @@ folder and reloads when files change.
   indented lines are notes for the item above
 \`\`\`
 
-- Tasks, learn and questions are either dated (\`due:\`) or parked (\`@later\`). With neither, the item is treated as due today.
+- Tasks, learn and questions are either dated (\`due:\`, on Today from that day) or parked (\`@later\`). With neither the item is Active: always on Today until done.
 - Routine items run on weekdays (mon..fri) by default. \`every:daily\` includes weekends; \`every:mon,wed,fri\` picks days. They only show on Today on those days.
 - \`!\` marks high priority, \`due:\` is the due date, \`added:\` / \`done:\` are bookkeeping dates (ISO).
 - Other lines (headings, prose) are preserved as-is.
