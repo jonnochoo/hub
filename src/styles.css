@@ -1222,3 +1222,43 @@ main:has(.page.today) {
 .note-x:hover {
     opacity: 1;
 }
+
+.note-mark {
+    display: inline-flex;
+    flex: none;
+    color: var(--muted);
+}
+
+/* ---- bookmarks (top of the Today log column) ---------------------------- */
+.bookmarks {
+    margin-bottom: 14px;
+}
+.bm-head {
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+    margin: 0 0 4px 2px;
+}
+.bm {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 3px 6px;
+    border-radius: 6px;
+    cursor: pointer;
+}
+.bm:hover {
+    background: var(--raised);
+}
+.bm-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.bm-empty,
+.bm-more {
+    font-size: 12px;
+    color: var(--muted);
+    padding: 3px 6px;
+    cursor: pointer;
+}

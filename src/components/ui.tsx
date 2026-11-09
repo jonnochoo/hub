@@ -2,6 +2,7 @@ import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { openUrl } from '../lib/fs'
+import { Icon } from './icons'
 import type { Bindings } from '../lib/hotkeys'
 
 export function useNow(active: boolean, ms = 1000): number {
@@ -32,6 +33,15 @@ export function useCursor(len: number) {
         'C-u': () => setC(Math.max(0, cur - 5)),
     }
     return { cur, setC, nav }
+}
+
+/** Small note icon shown on a row when the item or ticket has notes. */
+export function NoteMark() {
+    return (
+        <span className="note-mark" title="Has notes">
+            <Icon name="note" size={13} />
+        </span>
+    )
 }
 
 export function Row({

@@ -2,6 +2,12 @@ import type { ReactNode } from 'react'
 
 // Minimal stroke icons (24x24 grid), coloured via currentColor.
 const PATHS: Record<string, ReactNode> = {
+    note: (
+        <>
+            <path d="M6 3h9l4 4v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" />
+            <path d="M14 3v5h5M8.5 13h7M8.5 17h5" />
+        </>
+    ),
     today: (
         <>
             <rect x="3" y="4" width="18" height="17" rx="2" />

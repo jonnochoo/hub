@@ -4,13 +4,16 @@ import { hhmm, iso, parseDate, today } from './lib/dates'
 import { mapItem, newItem, parseList, serializeList, type Item, type Line } from './lib/md'
 import {
     LIST_KINDS,
+    parseBookmarks,
     parseDaily,
     parseTicket,
+    serializeBookmarks,
     serializeDaily,
     serializeTicket,
     ticketFile,
     ticketLabel,
     type Active,
+    type Bookmark,
     type Daily,
     type ListKind,
     type Status,
@@ -59,6 +62,7 @@ interface State {
     vaultPath: string
     tickets: Ticket[]
     lists: Record<ListKind, Line[]>
+    bookmarks: Bookmark[]
     dailyDates: string[]
     dailies: Record<string, Daily>
     active: Active | null
@@ -82,6 +86,8 @@ interface State {
     setSearch(s: string): void
     toggleShowDone(): void
     toast(msg: string): void
+
+    setBookmarks(b: Bookmark[]): Promise<void>
 
     addItem(kind: ListKind, text: string, extra?: Partial<Item>): Promise<void>
     patchItem(kind: ListKind, id: string, patch: Partial<Item>): Promise<void>
@@ -152,7 +158,9 @@ export const useStore = create<State>((set, get) => {
         const dailies: Record<string, Daily> = {}
         for (const d of Object.keys(get().dailies)) dailies[d] = parseDaily(d, await vault.read(`daily/${d}.md`))
 
-        set({ lists, tickets, dailyDates, active, dailies })
+        const bookmarks = parseBookmarks(await vault.read('bookmarks.md'))
+
+        set({ lists, tickets, dailyDates, active, dailies, bookmarks })
     }
 
     return {
@@ -160,6 +168,7 @@ export const useStore = create<State>((set, get) => {
         vaultPath: '',
         tickets: [],
         lists: { tasks: [], routine: [], reminders: [], learn: [], questions: [], ideas: [] },
+        bookmarks: [],
         dailyDates: [],
         dailies: {},
         active: null,
@@ -214,6 +223,11 @@ export const useStore = create<State>((set, get) => {
         },
 
         // ---- list items -----------------------------------------------------
+        async setBookmarks(bookmarks) {
+            set({ bookmarks })
+            await vault.write('bookmarks.md', serializeBookmarks(bookmarks))
+        },
+
         async addItem(kind, text, extra = {}) {
             if (kind === 'reminders' && openPostits(get().lists.reminders) >= MAX_POSTITS) {
                 get().toast(`Only ${MAX_POSTITS} post-its. Clear one first (1 or 2 on Today)`)
@@ -463,6 +477,10 @@ folder and reloads when files change.
 - Routine items run on weekdays (mon..fri) by default. \`every:daily\` includes weekends; \`every:mon,wed,fri\` picks days. They only show on Today on those days.
 - \`!\` marks high priority, \`due:\` is the due date, \`added:\` / \`done:\` are bookkeeping dates (ISO).
 - Other lines (headings, prose) are preserved as-is.
+
+## Bookmarks
+
+\`bookmarks.md\`: one \`- [Title](https://url)\` line per bookmark. The first nine show on Today (keys \`b 1\` to \`b 9\`).
 
 ## Tickets
 

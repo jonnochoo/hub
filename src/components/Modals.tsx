@@ -202,6 +202,8 @@ export const SHORTCUTS: { group: string; keys: [string, string][] }[] = [
             ['a', 'Add (Tab switches task / ticket / learn / question / idea)'],
             ['S', 'Clock out of the active item'],
             ['m', '(Today) new post-it, max 2'],
+            ['b 1 – b 9', '(Today) open bookmark 1 – 9'],
+            ['b a / b e', '(Today) add a bookmark / edit the bookmark list'],
             ['1 / 2', '(Today) clear post-it 1 / 2, when no ticket is highlighted (on a ticket, 1 – 6 set its status)'],
             ['/', 'Search'],
             ['r', 'Reload from disk'],

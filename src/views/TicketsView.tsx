@@ -6,7 +6,7 @@ import { STATUSES, ticketLabel, ticketWhen, type Status, type Ticket, type When 
 import { useHotkeys } from '../lib/hotkeys'
 import { promptDate, promptText } from '../lib/prompts'
 import { openUrl } from '../lib/fs'
-import { AddInput, Chip, Empty, InlineField, NotesField, PageHeader, Row, useCursor } from '../components/ui'
+import { AddInput, Chip, Empty, InlineField, NoteMark, NotesField, PageHeader, Row, useCursor } from '../components/ui'
 import { Elapsed } from '../components/Elapsed'
 
 const ORDER: Status[] = ['in-progress', 'blocked', 'review', 'ready-to-deploy', 'todo', 'done']
@@ -99,6 +99,7 @@ function TicketList() {
                             <span className={`dot ${x.status}`} />
                             {x.key && <span className="key">{x.key}</span>}
                             <span className="title">{x.title}</span>
+                            {x.notes.length > 0 && <NoteMark />}
                             <Chip tone={`s-${x.status}`}>{x.status}</Chip>
                             {working && s.active && <Elapsed start={s.active.start} />}
                             {x.planned && <Chip tone={x.planned < t ? 'warn' : 'accent'}>{fmtDate(x.planned)}</Chip>}

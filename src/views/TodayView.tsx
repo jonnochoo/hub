@@ -2,11 +2,11 @@ import { useEffect, useMemo } from 'react'
 import { MAX_POSTITS, useStore } from '../store'
 import { addDays, daysBetween, fmtDate, fmtMins, fromIso, logTime12, today } from '../lib/dates'
 import { itemsOf, onDay, type Item, type ItemLine } from '../lib/md'
-import { STATUSES, ticketLabel, type ListKind, type Status, type Ticket } from '../lib/model'
+import { parseBookmarkInput, parseBookmarks, serializeBookmarks, STATUSES, ticketLabel, type ListKind, type Status, type Ticket } from '../lib/model'
 import { useHotkeys } from '../lib/hotkeys'
 import { promptDate, promptText } from '../lib/prompts'
 import { openUrl } from '../lib/fs'
-import { Chip, Empty, NotesField, openFirstUrl, PageHeader, Rich, Row, TypeIcon, useCursor } from '../components/ui'
+import { Chip, Empty, NoteMark, NotesField, openFirstUrl, PageHeader, Rich, Row, TypeIcon, useCursor } from '../components/ui'
 import { Elapsed } from '../components/Elapsed'
 
 type Section = 'routine' | 'focus' | 'questions' | 'learn'
@@ -173,6 +173,32 @@ export function TodayView() {
             ])
         ),
         a: () => s.setModal({ type: 'add', kind: 'task', due: t }),
+        // Bookmarks: b 1-9 opens, b a adds, b e edits the whole list.
+        ...Object.fromEntries(
+            Array.from({ length: 9 }, (_, i) => [
+                `b ${i + 1}`,
+                () => {
+                    const b = s.bookmarks[i]
+                    if (b) void openUrl(b.url)
+                },
+            ])
+        ),
+        'b a': () =>
+            promptText(
+                'Add bookmark',
+                '',
+                (v) => {
+                    const b = parseBookmarkInput(v)
+                    if (b) void s.setBookmarks([...s.bookmarks, b]).then(() => s.toast(`Bookmarked ${b.title}`))
+                },
+                { hint: 'URL and optional title, e.g. github.com/org/repo Repo', validate: (v) => (parseBookmarkInput(v) ? null : 'Needs a URL') }
+            ),
+        'b e': () =>
+            promptText('Edit bookmarks', serializeBookmarks(s.bookmarks).replace(/^# Bookmarks\n\n/, ''), (v) => void s.setBookmarks(parseBookmarks(v)), {
+                multiline: true,
+                allowEmpty: true,
+                hint: 'One per line: - [Title](url). Reorder or delete lines; the first 9 get keys b 1 to b 9',
+            }),
     })
 
     const todayLog = s.dailies[t]?.log ?? []
@@ -244,6 +270,7 @@ export function TodayView() {
                                             <span className="title">{r.t.title}</span>
                                             {detail && <span className="note-preview">{detail}</span>}
                                         </span>
+                                        {r.t.notes.length > 0 && <NoteMark />}
                                         {working && s.active && <Elapsed start={s.active.start} />}
                                         {rolled && <Chip tone="warn">from {fmtDate(r.date)}</Chip>}
                                         {subs.length > 0 && (
@@ -272,6 +299,7 @@ export function TodayView() {
                                         {r.item.pri && <span className="pri">!</span>}
                                         <Rich text={r.item.text} />
                                     </span>
+                                    {r.item.notes.some((n) => n.trim()) && <NoteMark />}
                                     {working && s.active && <Elapsed start={s.active.start} />}
                                     {rolled && r.list !== 'routine' && <Chip tone="warn">due {fmtDate(r.date)}</Chip>}
                                 </Row>
@@ -290,6 +318,7 @@ export function TodayView() {
 
                 {/* ---- log ------------------------------------------------- */}
                 <div className="col col-log">
+                    <Bookmarks />
                     <PostIts postits={postits} />
                     <div className="log-scroll">
                     <h2 className="col-title">Log</h2>
@@ -325,6 +354,30 @@ export function TodayView() {
 }
 
 /** Up to two sticky notes. Tick (or press 1 / 2) to clear; double-click to edit. */
+/** Top of the third column: quick links, opened from the keyboard with b 1-9. */
+function Bookmarks() {
+    const s = useStore()
+    return (
+        <div className="bookmarks">
+            <h3 className="bm-head">
+                Bookmarks <span className="muted">b a add · b e edit</span>
+            </h3>
+            {s.bookmarks.length === 0 && (
+                <div className="bm-empty" onClick={() => promptText('Add bookmark', '', (v) => { const b = parseBookmarkInput(v); if (b) void s.setBookmarks([...s.bookmarks, b]) }, { validate: (v) => (parseBookmarkInput(v) ? null : 'Needs a URL') })}>
+                    + bookmark <kbd>b a</kbd>
+                </div>
+            )}
+            {s.bookmarks.slice(0, 9).map((b, i) => (
+                <div key={i} className="bm" title={b.url} onClick={() => void openUrl(b.url)}>
+                    <kbd>b {i + 1}</kbd>
+                    <span className="bm-title">{b.title}</span>
+                </div>
+            ))}
+            {s.bookmarks.length > 9 && <div className="muted bm-more">+{s.bookmarks.length - 9} more (b e)</div>}
+        </div>
+    )
+}
+
 function PostIts({ postits }: { postits: ItemLine[] }) {
     const s = useStore()
     if (postits.length === 0)

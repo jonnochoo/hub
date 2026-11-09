@@ -157,3 +157,44 @@ export const DATED_KINDS: ListKind[] = ['tasks', 'learn', 'questions']
 /** Tickets: later = parked, date = on Today from that day, active = always on Today until done. */
 export type When = 'later' | 'active' | 'date'
 export const ticketWhen = (t: Ticket): When => (t.planned ? 'date' : t.later ? 'later' : 'active')
+
+// ---- bookmarks -------------------------------------------------------------
+
+export interface Bookmark {
+    title: string
+    url: string
+}
+
+const hostOf = (url: string) => {
+    try {
+        return new URL(url).host.replace(/^www\./, '')
+    } catch {
+        return url
+    }
+}
+
+/** bookmarks.md: one `- [Title](url)` line per bookmark (a bare `- https://…` line also works). */
+export function parseBookmarks(src: string | null): Bookmark[] {
+    const out: Bookmark[] = []
+    for (const line of (src ?? '').split('\n')) {
+        const md = /^\s*[-*]\s*\[(.*?)\]\((\S+?)\)/.exec(line)
+        if (md) {
+            out.push({ title: md[1].trim() || hostOf(md[2]), url: md[2] })
+            continue
+        }
+        const bare = /^\s*[-*]\s*(https?:\/\/\S+)(?:\s+(.*))?$/.exec(line)
+        if (bare) out.push({ title: bare[2]?.trim() || hostOf(bare[1]), url: bare[1] })
+    }
+    return out
+}
+
+export const serializeBookmarks = (b: Bookmark[]): string => ['# Bookmarks', '', ...b.map((x) => `- [${x.title}](${x.url})`), ''].join('\n')
+
+/** "https://example.com Optional title" (or "Title example.com"). */
+export function parseBookmarkInput(input: string): Bookmark | null {
+    const m = /(?:https?:\/\/)?(?:[\w-]+\.)+[a-z]{2,}(?:[/?#]\S*)?/i.exec(input)
+    if (!m) return null
+    const url = /^https?:\/\//i.test(m[0]) ? m[0] : `https://${m[0]}`
+    const title = (input.slice(0, m.index) + input.slice(m.index + m[0].length)).trim()
+    return { title: title || hostOf(url), url }
+}

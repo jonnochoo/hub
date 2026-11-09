@@ -5,7 +5,7 @@ import { DATED_KINDS, LIST_TITLE, type ListKind } from '../lib/model'
 import { DAY_NAMES, WEEK, everyLabel, normalizeEvery, onDay, toggleDay, type ItemLine } from '../lib/md'
 import { useHotkeys } from '../lib/hotkeys'
 import { promptDate, promptText } from '../lib/prompts'
-import { Chip, Empty, InlineField, NotesField, openFirstUrl, PageHeader, Rich, Row, useCursor } from '../components/ui'
+import { Chip, Empty, InlineField, NoteMark, NotesField, openFirstUrl, PageHeader, Rich, Row, useCursor } from '../components/ui'
 import { Elapsed } from '../components/Elapsed'
 
 const ADD_KIND: Record<ListKind, AddKind> = { tasks: 'task', routine: 'routine', reminders: 'reminder', learn: 'learn', questions: 'question', ideas: 'idea' }
@@ -122,6 +122,7 @@ function ItemList({ kind }: { kind: ListKind }) {
                                 </span>
                                 {l.item.notes.length > 0 && <span className="note-preview">{l.item.notes.join(' ')}</span>}
                             </span>
+                            {l.item.notes.some((n) => n.trim()) && <NoteMark />}
                             {working && s.active && <Elapsed start={s.active.start} />}
                             {kind === 'routine' && <Chip tone={l.item.every ? 'accent' : undefined}>{everyLabel(l.item.every)}</Chip>}
                             {kind !== 'routine' && l.item.due && <Chip tone={overdue ? 'warn' : l.item.due === t ? 'accent' : undefined}>{fmtDate(l.item.due)}</Chip>}
