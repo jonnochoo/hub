@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { MAX_POSTITS, useStore } from '../store'
 import { addDays, daysBetween, fmtDate, fmtMins, fromIso, logTime12, today } from '../lib/dates'
 import { itemsOf, onDay, type Item, type ItemLine } from '../lib/md'
@@ -76,6 +76,19 @@ export function TodayView() {
 
     const { cur, setC, nav } = useCursor(rows.length)
     const row = rows[cur]
+
+    // The cursor is an index, so when a status change moves a row to another group the
+    // highlight would land on a different row. Follow the row by key instead.
+    const lastKey = useRef<string | undefined>(undefined)
+    const lastRows = useRef(rows)
+    useEffect(() => {
+        if (rows !== lastRows.current) {
+            lastRows.current = rows
+            const idx = lastKey.current ? rows.findIndex((r) => r.key === lastKey.current) : -1
+            if (idx >= 0 && idx !== cur) return setC(idx)
+        }
+        lastKey.current = rows[cur]?.key
+    })
     const postits = itemsOf(s.lists.reminders).filter((l) => !l.item.done).slice(0, MAX_POSTITS)
     const firstOf = (sec: Section) => rows.find((r) => sectionOf(r) === sec)
     const routineRows = rows.filter((r) => sectionOf(r) === 'routine')
