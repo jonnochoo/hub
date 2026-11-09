@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { useStore, type AddKind } from '../store'
 import { addDays, fmtDate, parseDate, today } from '../lib/dates'
-import { LIST_TITLE, type ListKind } from '../lib/model'
+import { DATED_KINDS, LIST_TITLE, type ListKind } from '../lib/model'
 import { DAY_NAMES, WEEK, everyLabel, normalizeEvery, onDay, toggleDay, type ItemLine } from '../lib/md'
 import { useHotkeys } from '../lib/hotkeys'
 import { promptDate, promptText } from '../lib/prompts'
@@ -19,16 +19,15 @@ const EMPTY: Record<ListKind, string> = {
     ideas: 'No ideas parked. Future work and "someday" thoughts go here.',
 }
 
-/** Kinds where every open item is dated, parked (@later), or waiting in triage. */
-export const TRIAGED: ListKind[] = ['tasks', 'learn', 'questions']
-type Group = 'triage' | 'due' | 'later' | 'done'
+/** Kinds where every open item is dated or parked (@later). */
+export const TRIAGED = DATED_KINDS
+type Group = 'due' | 'later' | 'done'
 const GROUPS: { id: Group; label: string; hint?: string }[] = [
-    { id: 'triage', label: 'Triage', hint: 'decide: l for later, or d to give it a date' },
     { id: 'later', label: 'Later' },
-    { id: 'due', label: 'Due date' },
+    { id: 'due', label: 'Due date', hint: 'no date = today' },
     { id: 'done', label: 'Done' },
 ]
-export const groupOf = (l: ItemLine): Group => (l.item.done ? 'done' : l.item.due ? 'due' : l.item.later ? 'later' : 'triage')
+export const groupOf = (l: ItemLine): Group => (l.item.done ? 'done' : l.item.later && !l.item.due ? 'later' : 'due')
 
 export const ListView = ({ kind }: { kind: ListKind }) => <ItemList kind={kind} />
 
@@ -135,7 +134,7 @@ export function ItemDetail({ kind, index }: { kind: ListKind; index: number }) {
     const isRoutine = kind === 'routine'
     const done = isRoutine ? it.completed === t : it.done
     const working = s.active?.kind === kind && s.active.ref === it.text
-    const mode: Group = it.due ? 'due' : it.later ? 'later' : 'triage'
+    const mode: Group = it.later && !it.due ? 'later' : 'due'
     const back = () => s.setOpenItem(kind, null)
     const patch = (p: Parameters<typeof s.patchItem>[2]) => void s.patchItem(kind, id, p)
     const toggleClock = () => (working ? void s.stopWork() : void s.startWork({ kind, ref: it.text, label: it.text }))
@@ -181,7 +180,6 @@ export function ItemDetail({ kind, index }: { kind: ListKind; index: number }) {
                     <div className="ifield">
                         <span className="ifield-label">When</span>
                         <div className="seg">
-                            {mode === 'triage' && <span className="status-btn triage on">Triage: choose one</span>}
                             <button className={`status-btn${mode === 'later' ? ' on' : ''}`} onClick={() => patch({ later: true })}>
                                 Later <kbd>l</kbd>
                             </button>

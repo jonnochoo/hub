@@ -1,11 +1,12 @@
 import { useEffect, useMemo } from 'react'
 import { MAX_POSTITS, useStore } from '../store'
-import { addDays, daysBetween, fmtDate, fmtMins, fromIso, today } from '../lib/dates'
+import { addDays, daysBetween, fmtDate, fmtMins, fromIso, logTime12, today } from '../lib/dates'
 import { itemsOf, onDay, type Item, type ItemLine } from '../lib/md'
-import { ticketLabel, type ListKind, type Ticket } from '../lib/model'
+import { STATUSES, ticketLabel, type ListKind, type Status, type Ticket } from '../lib/model'
 import { useHotkeys } from '../lib/hotkeys'
 import { promptDate, promptText } from '../lib/prompts'
-import { Chip, Empty, NotesField, PageHeader, Rich, Row, TypeIcon, useCursor } from '../components/ui'
+import { openUrl } from '../lib/fs'
+import { Chip, Empty, NotesField, openFirstUrl, PageHeader, Rich, Row, TypeIcon, useCursor } from '../components/ui'
 import { Elapsed } from '../components/Elapsed'
 
 type Section = 'routine' | 'focus' | 'questions' | 'learn'
@@ -20,6 +21,20 @@ const SECTION_TITLE: Record<Section, string> = {
     learn: 'Learn due',
 }
 const sectionOf = (r: TRow): Section => (r.kind === 'ticket' ? 'focus' : r.list === 'tasks' ? 'focus' : r.list)
+
+// Focus is grouped by ticket status, with due tasks last.
+type FocusGroup = Status | 'tasks'
+const FOCUS_ORDER: FocusGroup[] = ['in-progress', 'blocked', 'review', 'ready-to-deploy', 'todo', 'tasks']
+const FOCUS_LABEL: Record<FocusGroup, string> = {
+    'in-progress': 'In progress',
+    blocked: 'Blocked',
+    review: 'Review',
+    'ready-to-deploy': 'Ready to deploy',
+    todo: 'Planned',
+    done: 'Done',
+    tasks: 'Tasks due',
+}
+const focusGroupOf = (r: TRow): FocusGroup => (r.kind === 'ticket' ? r.t.status : 'tasks')
 
 export function TodayView() {
     const s = useStore()
@@ -44,8 +59,11 @@ export function TodayView() {
         }
         for (const l of s.lists.tasks)
             if (l.item && !l.item.done && l.item.due && l.item.due <= t) focus.push({ kind: 'item', list: 'tasks', key: l.id, id: l.id, item: l.item, date: l.item.due })
-        const weight = (r: TRow) => (r.kind === 'ticket' ? (r.t.status === 'in-progress' ? 0 : 1) : r.item.pri ? 0 : 2)
-        focus.sort((a, b) => a.date.localeCompare(b.date) || weight(a) - weight(b))
+        const weight = (r: TRow) => (r.kind === 'item' && r.item.pri ? 0 : 1)
+        focus.sort(
+            (a, b) =>
+                FOCUS_ORDER.indexOf(focusGroupOf(a)) - FOCUS_ORDER.indexOf(focusGroupOf(b)) || weight(a) - weight(b) || a.date.localeCompare(b.date)
+        )
 
         const dueOf = (list: 'questions' | 'learn'): TRow[] =>
             s.lists[list]
@@ -75,6 +93,36 @@ export function TodayView() {
             if (row.kind === 'ticket') s.setOpenTicket(row.t.file)
             else s.openItemById(row.list, row.id)
         },
+        e: () => (row?.kind === 'ticket' ? s.setOpenTicket(row.t.file) : row && s.openItemById(row.list, row.id)),
+        x: () => (row?.kind === 'ticket' ? void s.setStatus(row.t.file, 'done') : row && void s.toggleItem(row.list, row.id)),
+        // Same keys as the detail views, applied to the highlighted row.
+        l: () => {
+            if (!row || (row.kind === 'item' && row.list === 'routine')) return
+            if (row.kind === 'ticket') {
+                if (row.t.status !== 'todo') return s.toast('Only todo tickets can be parked; this one is always on Today')
+                void s.patchTicket(row.t.file, { later: true })
+            } else void s.patchItem(row.list, row.id, { later: true })
+            s.toast('Moved to Later')
+        },
+        t: () => {
+            if (!row || (row.kind === 'item' && row.list === 'routine')) return
+            if (row.kind === 'ticket') {
+                if (row.t.status !== 'todo') return s.toast('Only todo tickets are planned; this one is always on Today')
+                void s.patchTicket(row.t.file, { planned: t })
+            } else void s.patchItem(row.list, row.id, { due: t })
+            s.toast('Set for today')
+        },
+        o: () => {
+            if (!row) return
+            if (row.kind === 'ticket') return row.t.url ? void openUrl(row.t.url) : s.toast('No link on this ticket')
+            if (!openFirstUrl(row.item.text, ...row.item.notes)) s.toast('No link in this item')
+        },
+        '#': () => {
+            if (!row) return
+            if (row.kind === 'ticket') {
+                if (confirm(`Delete ${ticketLabel(row.t)}?`)) void s.removeTicket(row.t.file)
+            } else if (confirm(`Delete "${row.item.text}"?`)) void s.removeItem(row.list, row.id)
+        },
         s: () => row && void start(row),
         c: () => {
             if (!row) return
@@ -98,8 +146,17 @@ export function TodayView() {
         '!': () => row?.kind === 'item' && row.list !== 'routine' && void s.patchItem(row.list, row.id, { pri: !row.item.pri }),
         n: () => document.getElementById('notes-today-view')?.click(),
         m: () => s.setModal({ type: 'add', kind: 'reminder' }),
-        '1': () => postits[0] && void s.toggleItem('reminders', postits[0].id),
-        '2': () => postits[1] && void s.toggleItem('reminders', postits[1].id),
+        // On a highlighted ticket, 1-6 set its status (same keys as the Tickets view).
+        // Otherwise 1 and 2 clear the first two post-its.
+        ...Object.fromEntries(
+            STATUSES.map((st, i) => [
+                String(i + 1),
+                () => {
+                    if (row?.kind === 'ticket') return void s.setStatus(row.t.file, st).then(() => s.toast(`${row.t.key || row.t.title} → ${st}`))
+                    if (i < 2 && postits[i]) void s.toggleItem('reminders', postits[i].id)
+                },
+            ])
+        ),
         a: () => s.setModal({ type: 'add', kind: 'task', due: t }),
     })
 
@@ -107,9 +164,6 @@ export function TodayView() {
     const clocked = todayLog.reduce((sum, l) => sum + Number(l.match(/^- \d\d:\d\d–\d\d:\d\d \((\d+)m\)/)?.[1] ?? 0), 0)
     const prevDate = s.dailyDates.find((d) => d < t)
     const prev = prevDate ? s.dailies[prevDate] : undefined
-    const triageCount =
-        (['tasks', 'learn', 'questions'] as const).reduce((n, k) => n + itemsOf(s.lists[k]).filter((l) => !l.item.done && !l.item.due && !l.item.later).length, 0) +
-        s.tickets.filter((tk) => tk.status === 'todo' && !tk.planned && !tk.later).length
 
     const stale = s.tickets
         .filter((tk) => tk.status !== 'done' && daysBetween(tk.updated, t) >= 4)
@@ -119,7 +173,6 @@ export function TodayView() {
     return (
         <div className="page today">
             <PageHeader title="Today" sub={fmtDate(t) + ' · ' + new Date().toLocaleDateString(undefined, { day: 'numeric', month: 'long' })}>
-                {triageCount > 0 && <Chip tone="warn">{triageCount} to triage</Chip>}
                 {clocked > 0 && <Chip tone="accent">⏱ {fmtMins(clocked)} clocked</Chip>}
             </PageHeader>
 
@@ -146,6 +199,11 @@ export function TodayView() {
                                     )}
                                 </h3>
                             ) : null
+                        const fg = sec === 'focus' ? focusGroupOf(r) : null
+                        const subHead =
+                            fg && (i === 0 || sectionOf(rows[i - 1]) !== 'focus' || focusGroupOf(rows[i - 1]) !== fg) ? (
+                                <h4 className="group sub">{FOCUS_LABEL[fg]}</h4>
+                            ) : null
                         const rolled = r.date < t
 
                         if (r.kind === 'ticket') {
@@ -163,6 +221,7 @@ export function TodayView() {
                             return (
                                 <div key={r.key}>
                                     {head}
+                                    {subHead}
                                     <Row selected={i === cur} working={working} type="ticket" onClick={() => setC(i)} onDoubleClick={() => s.setOpenTicket(r.t.file)}>
                                         <TypeIcon kind="ticket" />
                                         {r.t.key && <span className="key">{r.t.key}</span>}
@@ -170,7 +229,6 @@ export function TodayView() {
                                             <span className="title">{r.t.title}</span>
                                             {detail && <span className="note-preview">{detail}</span>}
                                         </span>
-                                        <Chip tone={`s-${r.t.status}`}>{r.t.status}</Chip>
                                         {working && s.active && <Elapsed start={s.active.start} />}
                                         {rolled && <Chip tone="warn">from {fmtDate(r.date)}</Chip>}
                                         {subs.length > 0 && (
@@ -179,6 +237,7 @@ export function TodayView() {
                                             </Chip>
                                         )}
                                         {r.t.spent > 0 && <Chip>⏱ {fmtMins(r.t.spent)}</Chip>}
+                                        <Chip tone={`s-${r.t.status}`}>{r.t.status}</Chip>
                                     </Row>
                                 </div>
                             )
@@ -190,6 +249,7 @@ export function TodayView() {
                         return (
                             <div key={r.key}>
                                 {head}
+                                {subHead}
                                 <Row selected={i === cur} working={working} type={iconKind} onClick={() => setC(i)} onDoubleClick={() => s.openItemById(r.list, r.id)}>
                                     <TypeIcon kind={iconKind} />
                                     <span className={`check${done ? ' on' : ''}`} onClick={() => void s.toggleItem(r.list, r.id)} />
@@ -301,9 +361,10 @@ function TodayNotes({ date }: { date: string }) {
 export function LogList({ lines }: { lines: string[] }) {
     return (
         <ul className="log">
-            {lines.map((l, i) => (
+            {/* Stored oldest-first (appended); shown newest-first. */}
+            {[...lines].reverse().map((l, i) => (
                 <li key={i}>
-                    <Rich text={l.replace(/^- /, '')} />
+                    <Rich text={logTime12(l.replace(/^- /, ''))} />
                 </li>
             ))}
         </ul>

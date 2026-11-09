@@ -1,7 +1,7 @@
 import { parseDoc, parseList, serializeDoc, serializeList, splitSection, stripHeadings, slug, type Line } from './md'
 import { today } from './dates'
 
-export const STATUSES = ['todo', 'in-progress', 'blocked', 'review', 'done'] as const
+export const STATUSES = ['todo', 'in-progress', 'blocked', 'review', 'ready-to-deploy', 'done'] as const
 export type Status = (typeof STATUSES)[number]
 
 export interface Ticket {
@@ -13,7 +13,7 @@ export interface Ticket {
     created: string
     updated: string
     planned: string // the day I intend to work on it ('' = none)
-    later: boolean // parked. No planned date and not later = triage
+    later: boolean // parked. No planned date and not later = today
     spent: number // minutes clocked
     subtasks: Line[]
     notes: string
@@ -114,5 +114,8 @@ export const LIST_TITLE: Record<ListKind, string> = {
     ideas: 'Future & ideas',
 }
 
-export type When = 'triage' | 'later' | 'date'
-export const ticketWhen = (t: Ticket): When => (t.planned ? 'date' : t.later ? 'later' : 'triage')
+/** Kinds where every open item is either dated or parked (@later). No date = today. */
+export const DATED_KINDS: ListKind[] = ['tasks', 'learn', 'questions']
+
+export type When = 'later' | 'date'
+export const ticketWhen = (t: Ticket): When => (t.later && !t.planned ? 'later' : 'date')

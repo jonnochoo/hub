@@ -2,7 +2,8 @@ import { useEffect } from 'react'
 import { useStore, type AddKind, type ViewId } from './store'
 import { useHotkeys } from './lib/hotkeys'
 import { setWindowTitle } from './lib/fs'
-import { fmtDur } from './lib/dates'
+import { fmtDur, fromIso, today } from './lib/dates'
+import { itemsOf, onDay } from './lib/md'
 import { Elapsed } from './components/Elapsed'
 import { useNow } from './components/ui'
 import { Modals } from './components/Modals'
@@ -78,15 +79,31 @@ export default function App() {
 
     if (!s.ready) return <div className="loading">Opening vault…</div>
 
-    const navButton = (n: NavItem) => (
-        <button key={n.id} className={`nav${s.view === n.id ? ' on' : ''}`} onClick={() => s.setView(n.id)}>
-            <span className="nav-label">
-                <Icon name={n.id} />
-                {n.label}
-            </span>
-            <kbd>g {n.key}</kbd>
-        </button>
-    )
+    // Open (not completed) items per view. Routine items count only if they run today and are not yet ticked.
+    const todayIso = today()
+    const todayDow = fromIso(todayIso).getDay()
+    const openCount = (id: ViewId): number => {
+        if (id === 'tickets') return s.tickets.filter((tk) => tk.status !== 'done').length
+        if (id === 'routine') return itemsOf(s.lists.routine).filter((l) => onDay(l.item, todayDow) && l.item.completed !== todayIso).length
+        if (id === 'tasks' || id === 'questions' || id === 'learn' || id === 'ideas') return itemsOf(s.lists[id]).filter((l) => !l.item.done).length
+        return 0
+    }
+
+    const navButton = (n: NavItem) => {
+        const count = openCount(n.id)
+        return (
+            <button key={n.id} className={`nav${s.view === n.id ? ' on' : ''}`} onClick={() => s.setView(n.id)}>
+                <span className="nav-label">
+                    <Icon name={n.id} />
+                    {n.label}
+                </span>
+                <span className="nav-right">
+                    {count > 0 && <span className="nav-count" title="Not completed">{count}</span>}
+                    <kbd>g {n.key}</kbd>
+                </span>
+            </button>
+        )
+    }
 
     return (
         <div className={`app${s.active ? ' working' : ''}`}>

@@ -3,6 +3,7 @@ import { vault } from './lib/fs'
 import { hhmm, iso, parseDate, today } from './lib/dates'
 import { mapItem, newItem, parseList, serializeList, type Item, type Line } from './lib/md'
 import {
+    DATED_KINDS,
     LIST_KINDS,
     parseDaily,
     parseTicket,
@@ -124,6 +125,9 @@ export const useStore = create<State>((set, get) => {
         for (const k of LIST_KINDS) {
             const src = await vault.read(`${k}.md`)
             lists[k] = src === null ? parseList(LIST_HEADER[k]) : parseList(src)
+            // No triage: an open item with no date and not parked lands on Today.
+            if (DATED_KINDS.includes(k))
+                lists[k] = lists[k].map((l) => (l.item && !l.item.done && !l.item.due && !l.item.later ? { ...l, item: { ...l.item, due: today() } } : l))
         }
 
         const tickets: Ticket[] = []
@@ -132,6 +136,7 @@ export const useStore = create<State>((set, get) => {
             const src = await vault.read(`tickets/${name}`)
             if (src !== null) tickets.push(parseTicket(`tickets/${name}`, src))
         }
+        for (const tk of tickets) if (tk.status === 'todo' && !tk.planned && !tk.later) tk.planned = today()
         tickets.sort((a, b) => a.key.localeCompare(b.key) || a.title.localeCompare(b.title))
 
         const dailyDates = (await vault.list('daily'))
@@ -219,18 +224,19 @@ export const useStore = create<State>((set, get) => {
                 get().toast(`Only ${MAX_POSTITS} post-its. Clear one first (1 or 2 on Today)`)
                 return
             }
-            const lines = [...get().lists[kind], newItem(text, { added: today(), ...extra })]
+            const dated = DATED_KINDS.includes(kind) && !extra.due && !extra.later ? { due: today() } : {}
+            const lines = [...get().lists[kind], newItem(text, { added: today(), ...dated, ...extra })]
             await saveList(kind, lines)
         },
 
         async patchItem(kind, id, patch) {
             const lines = mapItem(get().lists[kind], id, (it) => {
                 const next = { ...it, ...patch }
-                // A date and "later" are mutually exclusive; neither means triage.
+                // A date and "later" are mutually exclusive; neither means today.
                 if (patch.due) next.later = undefined
                 if (patch.later) next.due = undefined
-                // Triage is only a starting state: clearing a date parks the item as Later.
-                if (['tasks', 'learn', 'questions'].includes(kind) && (it.due || it.later) && !next.due && !next.later) next.later = true
+                // Clearing a date parks the item as Later.
+                if (DATED_KINDS.includes(kind) && (it.due || it.later) && !next.due && !next.later) next.later = true
                 return next
             })
             await saveList(kind, lines)
@@ -268,7 +274,7 @@ export const useStore = create<State>((set, get) => {
                 status: 'todo',
                 created: today(),
                 updated: today(),
-                planned,
+                planned: planned || (later ? '' : today()),
                 later: !!later && !planned,
                 spent: 0,
                 subtasks: [],
@@ -284,7 +290,7 @@ export const useStore = create<State>((set, get) => {
             const t = get().tickets.find((x) => x.file === file)
             if (!t) return
             const next = { ...t, ...patch }
-            // A date and "later" are mutually exclusive; triage is only a starting state.
+            // A date and "later" are mutually exclusive.
             if (patch.planned) next.later = false
             if (patch.later) next.planned = ''
             if ((t.planned || t.later) && !next.planned && !next.later) next.later = true
@@ -295,7 +301,9 @@ export const useStore = create<State>((set, get) => {
             const t = get().tickets.find((x) => x.file === file)
             if (!t || t.status === status) return
             if (status === 'done' && get().active?.ref === file) await get().stopWork()
-            await saveTicket({ ...t, status })
+            // Back to todo with no date and not parked: land on Today rather than vanish.
+            const planned = status === 'todo' && !t.planned && !t.later ? today() : t.planned
+            await saveTicket({ ...t, status, planned })
             await get().appendLog(`- ${hhmm(new Date())} ${status === 'done' ? '✓ ' : ''}[[${t.key || t.title}]] → ${status}`)
         },
 
@@ -458,17 +466,17 @@ folder and reloads when files change.
   indented lines are notes for the item above
 \`\`\`
 
-- Tasks, learn and questions are either dated (\`due:\`), parked (\`@later\`), or neither = triage.
+- Tasks, learn and questions are either dated (\`due:\`) or parked (\`@later\`). With neither, the item is treated as due today.
 - Routine items run on weekdays (mon..fri) by default. \`every:daily\` includes weekends; \`every:mon,wed,fri\` picks days. They only show on Today on those days.
 - \`!\` marks high priority, \`due:\` is the due date, \`added:\` / \`done:\` are bookkeeping dates (ISO).
 - Other lines (headings, prose) are preserved as-is.
 
 ## Tickets
 
-Frontmatter: \`key\`, \`title\`, \`url\`, \`status\` (todo | in-progress | blocked | review | done),
+Frontmatter: \`key\`, \`title\`, \`url\`, \`status\` (todo | in-progress | blocked | review | ready-to-deploy | done),
 \`created\`, \`updated\`, \`planned\` (the day I intend to work on it), \`later: true\` (parked), \`spent\` (minutes clocked).
-Planning (\`planned\` / \`later\`) only applies to \`todo\` tickets; with neither set a todo ticket is in triage.
-Tickets that are in-progress, blocked or review always show on Today until done.
+Planning (\`planned\` / \`later\`) only applies to \`todo\` tickets; with neither set a todo ticket is planned for today.
+Tickets that are in-progress, blocked, review or ready-to-deploy always show on Today until done.
 Body: \`## Subtasks\` checklist, then \`## Notes\`.
 
 ## Daily log lines

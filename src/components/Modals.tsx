@@ -6,10 +6,10 @@ import { ADD_TO_LIST, MAX_POSTITS, openPostits, parseCapture, parseTicketInput, 
 import { setTheme, THEMES, getTheme } from '../theme'
 
 const KINDS: { kind: AddKind; label: string; hint: string }[] = [
-    { kind: 'task', label: 'Task', hint: 'Reply to Bob ^tom !   (^date or ^later; no date = triage; ! = priority)' },
+    { kind: 'task', label: 'Task', hint: 'Reply to Bob ^tom !   (^date or ^later; no date = today; ! = priority)' },
     { kind: 'reminder', label: 'Post-it', hint: 'Call the bank before 3pm   (max 2, shown on Today)' },
     { kind: 'routine', label: 'Daily', hint: 'Check PRs   (weekdays by default; every:daily, every:mon,wed,fri)' },
-    { kind: 'ticket', label: 'Ticket', hint: 'ABC-123 Fix login https://jira…/ABC-123   (^date or ^later; none = triage)' },
+    { kind: 'ticket', label: 'Ticket', hint: 'ABC-123 Fix login https://jira…/ABC-123   (^date or ^later; none = today)' },
     { kind: 'learn', label: 'Learn', hint: 'Rust lifetimes, https://…' },
     { kind: 'question', label: 'Question', hint: 'Why does the cache miss on cold start?' },
     { kind: 'idea', label: 'Idea', hint: 'Someday: …' },
@@ -190,7 +190,7 @@ export const SHORTCUTS: { group: string; keys: [string, string][] }[] = [
             ['g i', 'Tickets'],
             ['g a', 'Tasks'],
             ['g r', 'Daily routine'],
-            ['g d', 'Daily note'],
+            ['g d', 'Daily Notes'],
             ['g l', 'Things to learn'],
             ['g q', 'Questions'],
             ['g f', 'Future / ideas'],
@@ -202,7 +202,7 @@ export const SHORTCUTS: { group: string; keys: [string, string][] }[] = [
             ['a', 'Add (Tab switches task / ticket / learn / question / idea)'],
             ['S', 'Clock out of the active item'],
             ['m', '(Today) new post-it, max 2'],
-            ['1 / 2', '(Today) clear post-it 1 / 2'],
+            ['1 / 2', '(Today) clear post-it 1 / 2, when no ticket is highlighted (on a ticket, 1 – 6 set its status)'],
             ['/', 'Search'],
             ['r', 'Reload from disk'],
             [',', 'Settings'],
@@ -221,7 +221,7 @@ export const SHORTCUTS: { group: string; keys: [string, string][] }[] = [
             ['n', '(on an item page) edit notes'],
             ['d', 'Set due / plan date  (today, tom, mon, +3, +2w, 25 dec)'],
             ['t', 'Plan for today'],
-            ['l', 'Park as Later (tasks, learn, questions). Triage is the start state only'],
+            ['l', 'Park as Later (tasks, learn, questions). No date = due today'],
             ['p', 'Postpone a day'],
             ['!', 'Toggle priority'],
             ['o', 'Open first link'],
@@ -233,8 +233,8 @@ export const SHORTCUTS: { group: string; keys: [string, string][] }[] = [
     {
         group: 'Tickets',
         keys: [
-            ['1 – 5', 'Status: todo / in-progress / blocked / review / done'],
-            ['l / d / t', 'Todo ticket: Later, plan a date, plan today (new tickets start in Triage). Other statuses are always on Today'],
+            ['1 – 6', 'Status (Tickets and Today): todo / in-progress / blocked / review / ready-to-deploy / done'],
+            ['l / d / t', 'Todo ticket: Later, plan a date, plan today (new tickets are planned for today). Other statuses are always on Today'],
             ['Enter', 'Open ticket'],
             ['Esc', 'Back to list'],
             ['x', '(in a ticket) tick subtask'],
@@ -245,7 +245,7 @@ export const SHORTCUTS: { group: string; keys: [string, string][] }[] = [
         ],
     },
     {
-        group: 'Daily note',
+        group: 'Daily Notes',
         keys: [
             ['[ / ]', 'Previous / next day'],
             ['a', 'Append a timestamped note'],

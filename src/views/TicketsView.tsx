@@ -9,13 +9,12 @@ import { openUrl } from '../lib/fs'
 import { AddInput, Chip, Empty, InlineField, NotesField, PageHeader, Row, useCursor } from '../components/ui'
 import { Elapsed } from '../components/Elapsed'
 
-const ORDER: Status[] = ['in-progress', 'blocked', 'review', 'todo', 'done']
+const ORDER: Status[] = ['in-progress', 'blocked', 'review', 'ready-to-deploy', 'todo', 'done']
 type Group = When | 'active' | 'done'
 const GROUPS: { id: Group; label: string; hint?: string }[] = [
-    { id: 'active', label: 'Active', hint: 'in progress, blocked or in review: always on Today' },
-    { id: 'triage', label: 'Triage', hint: 'todo: decide with l for later, or d to plan a date' },
     { id: 'later', label: 'Later' },
-    { id: 'date', label: 'Planned' },
+    { id: 'active', label: 'Active', hint: 'in progress, blocked, in review or ready to deploy: always on Today' },
+    { id: 'date', label: 'Due Date', hint: 'todo with a date (no date = today)' },
     { id: 'done', label: 'Done' },
 ]
 const groupOf = (t: Ticket): Group => (t.status === 'done' ? 'done' : t.status !== 'todo' ? 'active' : ticketWhen(t))
@@ -183,12 +182,11 @@ export function TicketDetail({ file }: { file: string }) {
                 <div className="ifield">
                     <span className="ifield-label">When</span>
                     <div className="seg">
-                        {when === 'triage' && <span className="status-btn triage on">Triage: choose one</span>}
                         <button className={`status-btn${when === 'later' ? ' on' : ''}`} onClick={() => void s.patchTicket(file, { later: true })}>
                             Later <kbd>l</kbd>
                         </button>
                         <button className={`status-btn${when === 'date' ? ' on' : ''}`} onClick={() => !tk.planned && void s.patchTicket(file, { planned: t })}>
-                            Plan for a date <kbd>d</kbd>
+                            Due date <kbd>d</kbd>
                         </button>
                         {tk.spent > 0 && <Chip>{fmtMins(tk.spent)} clocked</Chip>}
                     </div>
@@ -196,7 +194,7 @@ export function TicketDetail({ file }: { file: string }) {
                 {when === 'date' && (
                     <InlineField
                         id="f-plan"
-                        label="Planned for"
+                        label="Due date"
                         value={tk.planned}
                         placeholder="today, tom, mon, +3, 25 dec · empty moves to Later"
                         onCommit={(v) => {

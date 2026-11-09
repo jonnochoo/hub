@@ -56,7 +56,7 @@ export function Row({
     return (
         <div
             ref={ref}
-            className={`row${selected ? ' selected' : ''}${working ? ' working' : ''}${type ? ` t-${type}` : ''}`}
+            className={`row${selected ? ' selected' : ''}${working ? ' working' : ''}${type ? ` t-${type}` : ''}${onClick || onDoubleClick ? ' clickable' : ''}`}
             onClick={onClick}
             onDoubleClick={onDoubleClick}
         >
