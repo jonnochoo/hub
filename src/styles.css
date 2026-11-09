@@ -1196,3 +1196,26 @@ main:has(.page.today) {
 *:hover {
     scrollbar-color: color-mix(in srgb, var(--muted) 55%, var(--border)) transparent;
 }
+
+/* ---- ticket notes ------------------------------------------------------ */
+.note-entry {
+    margin-top: 12px;
+}
+.note-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    margin: 0 0 3px 4px;
+}
+.note-x {
+    margin-left: auto;
+    background: none;
+    border: 0;
+    color: inherit;
+    opacity: 0.4;
+    cursor: pointer;
+}
+.note-x:hover {
+    opacity: 1;
+}

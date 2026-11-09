@@ -136,7 +136,6 @@ export const useStore = create<State>((set, get) => {
             const src = await vault.read(`tickets/${name}`)
             if (src !== null) tickets.push(parseTicket(`tickets/${name}`, src))
         }
-        for (const tk of tickets) if (tk.status === 'todo' && !tk.planned && !tk.later) tk.planned = today()
         tickets.sort((a, b) => a.key.localeCompare(b.key) || a.title.localeCompare(b.title))
 
         const dailyDates = (await vault.list('daily'))
@@ -274,11 +273,12 @@ export const useStore = create<State>((set, get) => {
                 status: 'todo',
                 created: today(),
                 updated: today(),
-                planned: planned || (later ? '' : today()),
+                planned,
                 later: !!later && !planned,
                 spent: 0,
                 subtasks: [],
-                notes: '',
+                next: '',
+                notes: [],
                 extra: {},
             }
             set((s) => ({ tickets: [...s.tickets, t] }))
@@ -293,7 +293,7 @@ export const useStore = create<State>((set, get) => {
             // A date and "later" are mutually exclusive.
             if (patch.planned) next.later = false
             if (patch.later) next.planned = ''
-            if ((t.planned || t.later) && !next.planned && !next.later) next.later = true
+            // Clearing both leaves the ticket Active (always on Today).
             await saveTicket(next)
         },
 
@@ -301,9 +301,9 @@ export const useStore = create<State>((set, get) => {
             const t = get().tickets.find((x) => x.file === file)
             if (!t || t.status === status) return
             if (status === 'done' && get().active?.ref === file) await get().stopWork()
-            // Back to todo with no date and not parked: land on Today rather than vanish.
-            const planned = status === 'todo' && !t.planned && !t.later ? today() : t.planned
-            await saveTicket({ ...t, status, planned })
+            // Working on it (any status but todo/done) makes it Active: always on Today.
+            const active = status !== 'todo' && status !== 'done'
+            await saveTicket({ ...t, status, planned: active ? '' : t.planned, later: active ? false : t.later })
             await get().appendLog(`- ${hhmm(new Date())} ${status === 'done' ? '✓ ' : ''}[[${t.key || t.title}]] → ${status}`)
         },
 
@@ -475,9 +475,10 @@ folder and reloads when files change.
 
 Frontmatter: \`key\`, \`title\`, \`url\`, \`status\` (todo | in-progress | blocked | review | ready-to-deploy | done),
 \`created\`, \`updated\`, \`planned\` (the day I intend to work on it), \`later: true\` (parked), \`spent\` (minutes clocked).
-Planning (\`planned\` / \`later\`) only applies to \`todo\` tickets; with neither set a todo ticket is planned for today.
-Tickets that are in-progress, blocked, review or ready-to-deploy always show on Today until done.
-Body: \`## Subtasks\` checklist, then \`## Notes\`.
+With neither \`planned\` nor \`later\` set the ticket is Active: always on Today until done. \`planned\` shows it on Today from that day; \`later\` parks it.
+Moving a ticket to in-progress, blocked, review or ready-to-deploy makes it Active.
+\`next:\` is a one-line "what's next" shown on Today.
+Body: \`## Subtasks\` checklist, then \`## Notes\`. Each note starts with a \`### YYYY-MM-DD HH:MM\` heading (created), with \` · updated YYYY-MM-DD HH:MM\` appended once edited; text before the first heading is an older unstamped note.
 
 ## Daily log lines
 

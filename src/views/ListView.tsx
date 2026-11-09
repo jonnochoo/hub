@@ -58,7 +58,14 @@ function ItemList({ kind }: { kind: ListKind }) {
     useHotkeys({
         ...nav,
         Enter: () => openRow(row),
-        e: () => openRow(row),
+        n: () => {
+            openRow(row)
+            setTimeout(() => document.getElementById('notes-detail-view')?.click(), 50)
+        },
+        e: () => {
+            openRow(row)
+            setTimeout(() => document.getElementById('f-text')?.focus(), 50)
+        },
         l: () => triaged && row && !row.item.done && void s.patchItem(kind, row.id, { later: true }),
         c: () => row && void s.toggleItem(kind, row.id),
         x: () => row && void s.toggleItem(kind, row.id),

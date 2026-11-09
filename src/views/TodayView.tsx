@@ -30,7 +30,7 @@ const FOCUS_LABEL: Record<FocusGroup, string> = {
     blocked: 'Blocked',
     review: 'Review',
     'ready-to-deploy': 'Ready to deploy',
-    todo: 'Planned',
+    todo: 'Todo',
     done: 'Done',
     tasks: 'Tasks due',
 }
@@ -55,7 +55,7 @@ export function TodayView() {
         const focus: TRow[] = []
         for (const tk of s.tickets) {
             if (tk.status === 'done') continue
-            if (tk.status !== 'todo' || (tk.planned && tk.planned <= t)) focus.push({ kind: 'ticket', key: tk.file, t: tk, date: tk.planned || t })
+            if (!tk.later && (!tk.planned || tk.planned <= t)) focus.push({ kind: 'ticket', key: tk.file, t: tk, date: tk.planned || t })
         }
         for (const l of s.lists.tasks)
             if (l.item && !l.item.done && l.item.due && l.item.due <= t) focus.push({ kind: 'item', list: 'tasks', key: l.id, id: l.id, item: l.item, date: l.item.due })
@@ -93,13 +93,18 @@ export function TodayView() {
             if (row.kind === 'ticket') s.setOpenTicket(row.t.file)
             else s.openItemById(row.list, row.id)
         },
-        e: () => (row?.kind === 'ticket' ? s.setOpenTicket(row.t.file) : row && s.openItemById(row.list, row.id)),
+        e: () => {
+            if (!row) return
+            // Open the main detail page with the name field focused.
+            if (row.kind === 'ticket') s.setOpenTicket(row.t.file)
+            else s.openItemById(row.list, row.id)
+            setTimeout(() => document.getElementById(row.kind === 'ticket' ? 'f-title' : 'f-text')?.focus(), 50)
+        },
         x: () => (row?.kind === 'ticket' ? void s.setStatus(row.t.file, 'done') : row && void s.toggleItem(row.list, row.id)),
         // Same keys as the detail views, applied to the highlighted row.
         l: () => {
             if (!row || (row.kind === 'item' && row.list === 'routine')) return
             if (row.kind === 'ticket') {
-                if (row.t.status !== 'todo') return s.toast('Only todo tickets can be parked; this one is always on Today')
                 void s.patchTicket(row.t.file, { later: true })
             } else void s.patchItem(row.list, row.id, { later: true })
             s.toast('Moved to Later')
@@ -107,7 +112,6 @@ export function TodayView() {
         t: () => {
             if (!row || (row.kind === 'item' && row.list === 'routine')) return
             if (row.kind === 'ticket') {
-                if (row.t.status !== 'todo') return s.toast('Only todo tickets are planned; this one is always on Today')
                 void s.patchTicket(row.t.file, { planned: t })
             } else void s.patchItem(row.list, row.id, { due: t })
             s.toast('Set for today')
@@ -131,7 +135,6 @@ export function TodayView() {
         },
         p: () => {
             if (!row || (row.kind === 'item' && row.list === 'routine')) return
-            if (row.kind === 'ticket' && row.t.status !== 'todo') return s.toast('Only todo tickets are planned; this one is always on Today')
             const next = addDays(row.date > t ? row.date : t, 1)
             if (row.kind === 'ticket') void s.patchTicket(row.t.file, { planned: next })
             else void s.patchItem(row.list, row.id, { due: next })
@@ -139,12 +142,18 @@ export function TodayView() {
         },
         d: () => {
             if (!row || (row.kind === 'item' && row.list === 'routine')) return
-            if (row.kind === 'ticket' && row.t.status !== 'todo') return s.toast('Only todo tickets are planned; this one is always on Today')
             if (row.kind === 'ticket') promptDate('Plan ticket for', row.t.planned, (v) => s.patchTicket(row.t.file, { planned: v }))
             else promptDate('Due date', row.item.due, (v) => s.patchItem(row.list, row.id, { due: v || undefined }))
         },
         '!': () => row?.kind === 'item' && row.list !== 'routine' && void s.patchItem(row.list, row.id, { pri: !row.item.pri }),
-        n: () => document.getElementById('notes-today-view')?.click(),
+        // n: notes of the highlighted row (opens its page, editing notes). N: Today's daily notes.
+        n: () => {
+            if (!row) return document.getElementById('notes-today-view')?.click()
+            if (row.kind === 'ticket') s.setOpenTicket(row.t.file)
+            else s.openItemById(row.list, row.id)
+            setTimeout(() => document.getElementById(row.kind === 'ticket' ? 'notes-new-view' : 'notes-detail-view')?.click(), 50)
+        },
+        N: () => document.getElementById('notes-today-view')?.click(),
         m: () => s.setModal({ type: 'add', kind: 'reminder' }),
         // On a highlighted ticket, 1-6 set its status (same keys as the Tickets view).
         // Otherwise 1 and 2 clear the first two post-its.
@@ -209,10 +218,10 @@ export function TodayView() {
                         if (r.kind === 'ticket') {
                             const subs = itemsOf(r.t.subtasks)
                             const working = s.active?.kind === 'ticket' && s.active.ref === r.t.file
-                            const next = subs.find((x) => !x.item.done)
                             const age = daysBetween(r.t.updated, t)
+                            const latestNote = r.t.notes[r.t.notes.length - 1]?.text ?? ''
                             const detail = [
-                                next ? `next: ${next.item.text}` : r.t.notes.split(String.fromCharCode(10)).find((l) => l.trim())?.replace(/^[#>*\-\s]+/, ''),
+                                r.t.next ? `next: ${r.t.next}` : latestNote.split(String.fromCharCode(10)).find((l) => l.trim())?.replace(/^[#>*\-\s]+/, ''),
                                 hostOf(r.t.url),
                                 age > 0 ? `updated ${age}d ago` : 'updated today',
                             ]
@@ -268,7 +277,7 @@ export function TodayView() {
                 {/* ---- notes ----------------------------------------------- */}
                 <div className="col col-notes">
                     <h2 className="col-title">
-                        Notes <span className="muted">(n)</span>
+                        Notes <span className="muted">(N)</span>
                     </h2>
                     <TodayNotes date={t} />
                 </div>

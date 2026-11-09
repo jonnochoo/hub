@@ -23,7 +23,7 @@ const GROUPS: { title: string; items: NavItem[] }[] = [
         items: [
             { id: 'tickets', label: 'Tickets', key: 'i' },
             { id: 'tasks', label: 'Tasks', key: 'a' },
-            { id: 'routine', label: 'Daily routine', key: 'r' },
+            { id: 'routine', label: 'Routine', key: 'r' },
         ],
     },
     {
@@ -37,7 +37,7 @@ const GROUPS: { title: string; items: NavItem[] }[] = [
         title: 'Someday',
         items: [
             { id: 'learn', label: 'Learning', key: 'l' },
-            { id: 'ideas', label: 'Future ideas', key: 'f' },
+            { id: 'ideas', label: 'Ideas', key: 'f' },
         ],
     },
 ]
