@@ -1,6 +1,6 @@
 [package]
 name = "hub"
-version = "0.0.1"
+version = "0.0.2"
 description = "Personal daily workflow hub backed by markdown files"
 edition = "2021"
 
