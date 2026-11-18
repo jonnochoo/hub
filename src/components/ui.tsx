@@ -47,6 +47,7 @@ export function NoteMark() {
 export function Row({
     selected,
     working,
+    ringing,
     onClick,
     onDoubleClick,
     type,
@@ -55,6 +56,7 @@ export function Row({
     type?: 'ticket' | 'task' | 'routine' | 'question' | 'learn'
     selected: boolean
     working?: boolean
+    ringing?: boolean
     onClick?: () => void
     onDoubleClick?: () => void
     children: ReactNode
@@ -66,7 +68,7 @@ export function Row({
     return (
         <div
             ref={ref}
-            className={`row${selected ? ' selected' : ''}${working ? ' working' : ''}${type ? ` t-${type}` : ''}${onClick || onDoubleClick ? ' clickable' : ''}`}
+            className={`row${selected ? ' selected' : ''}${working ? ' working' : ''}${ringing ? ' ringing' : ''}${type ? ` t-${type}` : ''}${onClick || onDoubleClick ? ' clickable' : ''}`}
             onClick={onClick}
             onDoubleClick={onDoubleClick}
         >

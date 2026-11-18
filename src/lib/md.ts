@@ -8,6 +8,7 @@ export interface Item {
     added?: string
     completed?: string
     pri?: boolean
+    at?: string // time of day 'HH:MM' for a Today reminder
     later?: boolean // parked: no date yet, deliberately not now
     every?: string // routine schedule: 'daily', or e.g. 'mon,wed,fri'. Undefined = weekdays
     notes: string[]
@@ -33,6 +34,11 @@ function parseItemText(s: string): Omit<Item, 'done' | 'notes'> {
         if (k === 'due') out.due = v
         else if (k === 'added') out.added = v
         else out.completed = v
+        return ''
+    })
+    out.text = out.text.replace(/(?:^|\s)at:(\d{1,2}):(\d{2})(?=\s|$)/g, (m, h: string, mm: string) => {
+        if (Number(h) > 23 || Number(mm) > 59) return m
+        out.at = `${h.padStart(2, '0')}:${mm}`
         return ''
     })
     out.text = out.text.replace(/(?:^|\s)!(?=\s|$)/g, () => {
@@ -80,6 +86,7 @@ export function serializeItem(it: Item): string[] {
     if (it.later) head += ' @later'
     if (it.every) head += ` every:${it.every}`
     if (it.due) head += ` due:${it.due}`
+    if (it.at) head += ` at:${it.at}`
     if (it.added) head += ` added:${it.added}`
     if (it.completed) head += ` done:${it.completed}`
     return [head, ...it.notes.map((n) => (n ? `  ${n}` : ''))]
