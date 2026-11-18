@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { useHotkeys } from '../lib/hotkeys'
-import { fmtDate } from '../lib/dates'
+import { fmtDate, today } from '../lib/dates'
 import { normalizeEvery } from '../lib/md'
 import { ADD_TO_LIST, MAX_POSTITS, openPostits, parseCapture, parseTicketInput, useStore, type AddKind } from '../store'
 import { setTheme, THEMES, getTheme } from '../theme'
 
 const KINDS: { kind: AddKind; label: string; hint: string }[] = [
-    { kind: 'task', label: 'Task', hint: 'Reply to Bob ^tom !   (^date or ^later; no date = active, always on Today; ! = priority)' },
-    { kind: 'reminder', label: 'Post-it', hint: 'Call the bank before 3pm   (max 2, shown on Today)' },
+    { kind: 'task', label: 'Task', hint: 'Reply to Bob ^tom !   (^date or ^later; no date = active, always on Today; ! = priority; @2pm sets a reminder time today)' },
+    { kind: 'reminder', label: 'Post-it', hint: 'Call the bank @3pm   (max 2, shown on Today; @time alerts you)' },
     { kind: 'routine', label: 'Daily', hint: 'Check PRs   (weekdays by default; every:daily, every:mon,wed,fri)' },
     { kind: 'ticket', label: 'Ticket', hint: 'ABC-123 Fix login https://jira…/ABC-123   (^date or ^later; none = active, always on Today)' },
     { kind: 'learn', label: 'Learn', hint: 'Rust lifetimes, https://…' },
@@ -75,13 +75,14 @@ function AddModal({ initial, due }: { initial: AddKind; due?: string }) {
                           return ''
                       })
                     : raw
-            const { text: body, due: d, pri, later } = parseCapture(rest)
+            const { text: body, due: d, pri, later, at } = parseCapture(rest)
             if (!body) return
             await addItem(ADD_TO_LIST[kind], body, {
                 pri: pri || undefined,
                 every: sched.v,
                 later: later && kind !== 'idea' ? true : undefined,
-                due: d ?? (kind === 'task' ? due : undefined),
+                due: d ?? (kind === 'task' ? due : at && kind !== 'routine' ? today() : undefined),
+                at,
             })
             toast(`${KINDS.find((k) => k.kind === kind)!.label} added`)
         }
@@ -222,7 +223,9 @@ export const SHORTCUTS: { group: string; keys: [string, string][] }[] = [
             ['e', 'Open the item page with the name focused for editing (Enter opens it too)'],
             ['n', 'Edit notes of the highlighted item (opens its page); on an item page, edit its notes'],
             ['i', '(Today) edit the day\'s notes'],
-            ['w', '(ticket page) edit its Next line'],
+            ['w', '(ticket page) edit its Next line. (Today) set a reminder time on the highlighted row: 2pm, 14:30, +30m; empty clears'],
+            ['z', '(Today) snooze the highlighted row reminder 10 minutes'],
+            ['Z / X', '(when a reminder is ringing) snooze all 10 minutes / dismiss all'],
             ['d', 'Set due / plan date  (today, tom, mon, +3, +2w, 25 dec)'],
             ['t', 'Plan for today'],
             ['l', 'Park as Later (tasks, learn, questions)'],

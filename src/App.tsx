@@ -7,6 +7,7 @@ import { itemsOf, onDay } from './lib/md'
 import { Elapsed } from './components/Elapsed'
 import { useNow } from './components/ui'
 import { Modals } from './components/Modals'
+import { Reminders } from './components/Reminders'
 import { Icon } from './components/icons'
 import { TodayView } from './views/TodayView'
 import { TicketDetail, TicketsView } from './views/TicketsView'
@@ -157,6 +158,7 @@ export default function App() {
 
             <DetailModal />
             <Modals />
+            <Reminders />
             {s.toastMsg && <div className="toast">{s.toastMsg}</div>}
         </div>
     )

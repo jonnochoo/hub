@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { vault } from './lib/fs'
-import { hhmm, iso, parseDate, today } from './lib/dates'
+import { hhmm, iso, parseDate, parseTime, today } from './lib/dates'
 import { mapItem, newItem, parseList, serializeList, type Item, type Line } from './lib/md'
 import {
     LIST_KINDS,
@@ -281,6 +281,7 @@ export const useStore = create<State>((set, get) => {
                 created: today(),
                 updated: today(),
                 planned,
+                at: '',
                 later: !!later && !planned,
                 spent: 0,
                 subtasks: [],
@@ -397,8 +398,9 @@ export const useStore = create<State>((set, get) => {
 // ---------------------------------------------------------------------------
 // Quick-capture parsing:  "Reply to Bob ^tom !"   "ABC-123 Fix login https://jira/…"
 
-export function parseCapture(input: string): { text: string; due?: string; pri: boolean; later?: boolean } {
+export function parseCapture(input: string): { text: string; due?: string; pri: boolean; later?: boolean; at?: string } {
     let due: string | undefined
+    let at: string | undefined
     let later: boolean | undefined
     let pri = false
     let text = input.replace(/(?:^|\s)\^(\S+)/, (m, d: string) => {
@@ -411,11 +413,17 @@ export function parseCapture(input: string): { text: string; due?: string; pri: 
         due = p
         return ''
     })
+    text = text.replace(/(?:^|\s)@(\S+)/, (m, v: string) => {
+        const p = parseTime(v)
+        if (!p) return m
+        at = p
+        return ''
+    })
     text = text.replace(/(?:^|\s)!(?=\s|$)/g, () => {
         pri = true
         return ''
     })
-    return { text: text.trim(), due, pri, later }
+    return { text: text.trim(), due, pri, later, at }
 }
 
 export function parseTicketInput(input: string): { key: string; title: string; url: string; planned: string; later?: boolean } {

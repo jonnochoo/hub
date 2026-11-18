@@ -1262,3 +1262,183 @@ main:has(.page.today) {
     padding: 3px 6px;
     cursor: pointer;
 }
+
+/* ---- reminders --------------------------------------------------------- */
+.chip.time {
+    font-variant-numeric: tabular-nums;
+}
+.chip.time.soon {
+    color: var(--warn);
+    border-color: color-mix(in srgb, var(--warn) 55%, transparent);
+}
+.chip.time.late {
+    color: var(--danger);
+    border-color: color-mix(in srgb, var(--danger) 55%, transparent);
+    background: color-mix(in srgb, var(--danger) 10%, transparent);
+}
+.chip.time.done {
+    opacity: 0.5;
+    text-decoration: line-through;
+}
+.row.ringing {
+    border-color: var(--danger);
+    animation: ring 1.2s ease-in-out infinite;
+}
+@keyframes ring {
+    0%,
+    100% {
+        background: color-mix(in srgb, var(--danger) 8%, var(--raised));
+    }
+    50% {
+        background: color-mix(in srgb, var(--danger) 26%, var(--raised));
+    }
+}
+
+.sched {
+    margin: 2px 0 14px;
+    padding: 9px 12px 8px;
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    background: var(--panel);
+}
+.sched-line {
+    display: flex;
+    gap: 12px;
+    font-size: 12.5px;
+    margin-bottom: 14px;
+}
+.sched-over {
+    color: var(--danger);
+    font-weight: 600;
+}
+.sched-bar {
+    position: relative;
+    height: 6px;
+    border-radius: 99px;
+    background: var(--raised);
+    margin: 0 6px 16px;
+}
+.sched-fill {
+    position: absolute;
+    inset: 0 auto 0 0;
+    border-radius: 99px;
+    background: color-mix(in srgb, var(--accent) 35%, transparent);
+}
+.sched-tick {
+    position: absolute;
+    top: 11px;
+    transform: translateX(-50%);
+    font-size: 10px;
+    color: var(--muted);
+}
+.sched-now {
+    position: absolute;
+    top: -4px;
+    width: 2px;
+    height: 14px;
+    margin-left: -1px;
+    background: var(--accent);
+    border-radius: 2px;
+}
+.sched-dot {
+    position: absolute;
+    top: 50%;
+    width: 12px;
+    height: 12px;
+    margin: -6px 0 0 -6px;
+    border-radius: 50%;
+    background: var(--muted);
+    border: 2px solid var(--panel);
+    box-sizing: border-box;
+}
+.sched-dot.soon {
+    background: var(--warn);
+}
+.sched-dot.late {
+    background: var(--danger);
+}
+.sched-dot.done {
+    background: var(--ok);
+}
+.sched-dot.ringing {
+    animation: pulse 1.2s ease-out infinite;
+}
+
+.alerts {
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    z-index: 40;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 320px;
+    max-width: calc(100vw - 32px);
+}
+.alert-card {
+    background: var(--raised);
+    border: 1px solid var(--danger);
+    border-left-width: 4px;
+    border-radius: 9px;
+    padding: 10px 12px;
+    box-shadow: 0 10px 34px rgba(0, 0, 0, 0.45);
+}
+.alert-time {
+    font-size: 11px;
+    color: var(--danger);
+    font-weight: 600;
+}
+.alert-label {
+    margin: 2px 0 8px;
+    overflow-wrap: anywhere;
+}
+.alert-actions {
+    display: flex;
+    gap: 6px;
+}
+.alert-actions button {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 3px 10px;
+    cursor: pointer;
+}
+.alert-actions button:hover {
+    border-color: var(--accent);
+}
+.alert-all {
+    font-size: 11px;
+    color: var(--muted);
+    text-align: right;
+}
+
+/* ---- Today: active | notes + bookmarks | waiting + post-its + compact log ---- */
+.toggle-done {
+    margin-left: 10px;
+    padding: 1px 8px;
+    font-size: 11px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: none;
+    color: var(--muted);
+    cursor: pointer;
+}
+.toggle-done:hover,
+.toggle-done.on {
+    border-color: var(--accent);
+    color: var(--text);
+}
+.col-notes .bookmarks {
+    flex: none;
+    margin: 12px 0 0;
+}
+.col-waiting {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    margin-bottom: 12px;
+}
+.col-log .log-scroll {
+    flex: 0 1 30%;
+    min-height: 90px;
+}

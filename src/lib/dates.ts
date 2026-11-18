@@ -112,3 +112,51 @@ export function fmtMins(mins: number): string {
     const m = mins % 60
     return m ? `${h}h ${m}m` : `${h}h`
 }
+
+// ---- time of day ('HH:MM', 24h, local) ---------------------------------------
+
+export const minOf = (t: string): number => {
+    const [h, m] = t.split(':').map(Number)
+    return h * 60 + m
+}
+export const hmOf = (mins: number): string => {
+    const c = Math.max(0, Math.min(1439, Math.round(mins)))
+    return `${pad(Math.floor(c / 60))}:${pad(c % 60)}`
+}
+export const nowMins = (d = new Date()) => d.getHours() * 60 + d.getMinutes()
+
+/** 14:30 → 2:30pm, 09:00 → 9am. Display only; files stay 24h. */
+export function fmtTime12(t: string): string {
+    const [h, m] = t.split(':').map(Number)
+    return `${h % 12 || 12}${m ? ':' + pad(m) : ''}${h < 12 ? 'am' : 'pm'}`
+}
+
+/**
+ * Time-of-day entry: 14:30, 1430, 2pm, 2:30pm, 230p, or relative +30, +30m, +2h, +1h30.
+ * Returns 'HH:MM' (24h), or null when it can't be understood.
+ */
+export function parseTime(input: string, now = new Date()): string | null {
+    const s = input.trim().toLowerCase().replace(/\s+/g, '')
+    if (!s) return null
+    const rel = /^\+(\d+)(?:(m|min|mins)|(h|hr|hrs)(?:(\d+)m?)?)?$/.exec(s)
+    if (rel) {
+        const add = rel[3] ? Number(rel[1]) * 60 + Number(rel[4] ?? 0) : Number(rel[1])
+        return hmOf(nowMins(now) + add)
+    }
+    const ap = /^(\d{1,2})(?::?(\d{2}))?(am|pm|a|p)$/.exec(s)
+    if (ap) {
+        let h = Number(ap[1])
+        const m = Number(ap[2] ?? 0)
+        if (h < 1 || h > 12 || m > 59) return null
+        h = (h % 12) + (ap[3].startsWith('p') ? 12 : 0)
+        return `${pad(h)}:${pad(m)}`
+    }
+    const h24 = /^(\d{1,2}):(\d{2})$/.exec(s) ?? /^(\d{1,2})(\d{2})$/.exec(s)
+    if (h24) {
+        const h = Number(h24[1])
+        const m = Number(h24[2])
+        if (h > 23 || m > 59) return null
+        return `${pad(h)}:${pad(m)}`
+    }
+    return null
+}

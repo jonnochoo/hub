@@ -47,6 +47,7 @@ export interface Ticket {
     created: string
     updated: string
     planned: string // the day I intend to work on it ('' = none)
+    at: string // time of day 'HH:MM' for a Today reminder ('' = none). Only alerts on the planned day
     later: boolean // parked. No planned date and not later = active (always on Today)
     spent: number // minutes clocked
     subtasks: Line[]
@@ -55,7 +56,7 @@ export interface Ticket {
     extra: Record<string, string> // unknown frontmatter, preserved for agents/humans
 }
 
-const KNOWN = ['key', 'title', 'url', 'status', 'created', 'updated', 'planned', 'later', 'spent', 'next']
+const KNOWN = ['key', 'title', 'url', 'status', 'created', 'updated', 'planned', 'at', 'later', 'spent', 'next']
 
 export function parseTicket(file: string, src: string): Ticket {
     const { fm, body } = parseDoc(src)
@@ -73,6 +74,7 @@ export function parseTicket(file: string, src: string): Ticket {
         created: fm.created || today(),
         updated: fm.updated || fm.created || today(),
         planned: /^\d{4}-\d{2}-\d{2}$/.test(fm.planned ?? '') ? fm.planned : '',
+        at: /^\d{2}:\d{2}$/.test(fm.at ?? '') ? fm.at : '',
         later: fm.later === 'true' || fm.planned === 'later',
         spent: Number(fm.spent) || 0,
         subtasks: parseList(sub.lines.join('\n')),
@@ -91,6 +93,7 @@ export function serializeTicket(t: Ticket): string {
         created: t.created,
         updated: t.updated,
         planned: t.planned,
+        at: t.at,
         later: t.later ? 'true' : '',
         spent: t.spent ? String(t.spent) : '',
         next: t.next,
