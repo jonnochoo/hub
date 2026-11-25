@@ -82,7 +82,7 @@ export function Reminders() {
     })
 
     if (cards.length === 0) return null
-    const done = (t: Timed) => (t.kind === 'ticket' ? s.setStatus(t.ref, 'done') : s.toggleItem(t.kind, t.id))
+    const done = (t: Timed) => (t.kind === 'ticket' ? s.setTicketDone(t.ref, true) : s.toggleItem(t.kind, t.id))
     return (
         <div className="alerts" role="alert">
             {cards.map((t) => (

@@ -7,6 +7,7 @@ export interface Item {
     due?: string
     added?: string
     completed?: string
+    doneAt?: string // time of day (HH:MM) it was completed
     pri?: boolean
     at?: string // time of day 'HH:MM' for a Today reminder
     later?: boolean // parked: no date yet, deliberately not now
@@ -30,10 +31,13 @@ const DATE = '\\d{4}-\\d{2}-\\d{2}'
 
 function parseItemText(s: string): Omit<Item, 'done' | 'notes'> {
     const out: Omit<Item, 'done' | 'notes'> = { text: s }
-    out.text = out.text.replace(new RegExp(`(?:^|\\s)(due|added|done):(${DATE})(?=\\s|$)`, 'g'), (_m, k, v) => {
+    out.text = out.text.replace(new RegExp(`(?:^|\\s)(due|added|done):(${DATE})(?:T(\\d{2}:\\d{2}))?(?=\\s|$)`, 'g'), (_m, k, v, tm) => {
         if (k === 'due') out.due = v
         else if (k === 'added') out.added = v
-        else out.completed = v
+        else {
+            out.completed = v
+            if (tm) out.doneAt = tm
+        }
         return ''
     })
     out.text = out.text.replace(/(?:^|\s)at:(\d{1,2}):(\d{2})(?=\s|$)/g, (m, h: string, mm: string) => {
@@ -88,7 +92,7 @@ export function serializeItem(it: Item): string[] {
     if (it.due) head += ` due:${it.due}`
     if (it.at) head += ` at:${it.at}`
     if (it.added) head += ` added:${it.added}`
-    if (it.completed) head += ` done:${it.completed}`
+    if (it.completed) head += ` done:${it.completed}${it.doneAt ? `T${it.doneAt}` : ''}`
     return [head, ...it.notes.map((n) => (n ? `  ${n}` : ''))]
 }
 

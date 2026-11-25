@@ -2,22 +2,22 @@ import { useMemo } from 'react'
 import { useStore } from '../store'
 import { addDays, fmtDate, fmtMins, logTime12, parseDate, stamp, today } from '../lib/dates'
 import { itemsOf, mapItem, newItem } from '../lib/md'
-import { STATUSES, ticketLabel, ticketWhen, type Status, type Ticket, type When } from '../lib/model'
+import { STATUS_LABEL, STATUSES, ticketLabel, ticketWhen, type Status, type Ticket, type When } from '../lib/model'
 import { useHotkeys } from '../lib/hotkeys'
 import { promptDate, promptText } from '../lib/prompts'
 import { openUrl } from '../lib/fs'
 import { AddInput, Chip, Empty, InlineField, NoteMark, NotesField, PageHeader, Row, useCursor } from '../components/ui'
 import { Elapsed } from '../components/Elapsed'
 
-const ORDER: Status[] = ['in-progress', 'blocked', 'review', 'ready-to-deploy', 'todo', 'done']
+const ORDER: Status[] = ['in-progress', 'blocked', 'review', 'ready-to-deploy', 'todo', 'deployed-monitoring']
 type Group = When | 'done'
 const GROUPS: { id: Group; label: string; hint?: string }[] = [
     { id: 'later', label: 'Later' },
     { id: 'active', label: 'Active', hint: 'always on Today until done' },
     { id: 'date', label: 'Date', hint: 'on Today from its date' },
-    { id: 'done', label: 'Done' },
+    { id: 'done', label: 'Deployed + monitoring' },
 ]
-const groupOf = (t: Ticket): Group => (t.status === 'done' ? 'done' : ticketWhen(t))
+const groupOf = (t: Ticket): Group => (t.done ? 'done' : ticketWhen(t))
 
 export const TicketsView = () => <TicketList />
 
@@ -28,7 +28,7 @@ function TicketList() {
 
     const list = useMemo(() => {
         return s.tickets
-            .filter((x) => (s.showDone || x.status !== 'done') && (!q || `${x.key} ${x.title} ${x.next} ${x.notes.map((n) => n.text).join(' ')}`.toLowerCase().includes(q)))
+            .filter((x) => (s.showDone || !x.done) && (!q || `${x.key} ${x.title} ${x.next} ${x.notes.map((n) => n.text).join(' ')}`.toLowerCase().includes(q)))
             .sort(
                 (a, b) =>
                     GROUPS.findIndex((g) => g.id === groupOf(a)) - GROUPS.findIndex((g) => g.id === groupOf(b)) ||
@@ -62,7 +62,7 @@ function TicketList() {
         t: () => tk && void s.patchTicket(tk.file, { planned: t }).then(() => s.toast('Planned for today')),
         p: () => tk && void s.patchTicket(tk.file, { planned: addDays(tk.planned > t ? tk.planned : t, 1) }),
         d: () => tk && promptDate('Plan ticket for', tk.planned, (v) => s.patchTicket(tk.file, { planned: v })),
-        c: () => setStatus('done'),
+        c: () => tk && void s.setTicketDone(tk.file, !tk.done),
         H: s.toggleShowDone,
         '#': () => {
             if (tk && confirm(`Delete ${ticketLabel(tk)}?`)) void s.removeTicket(tk.file)
@@ -98,9 +98,10 @@ function TicketList() {
                         <Row selected={i === cur} working={working} onClick={() => setC(i)} onDoubleClick={() => s.setOpenTicket(x.file)}>
                             <span className={`dot ${x.status}`} />
                             {x.key && <span className="key">{x.key}</span>}
+                            {x.pri && <span className="pri">!</span>}
                             <span className="title">{x.title}</span>
                             {x.notes.length > 0 && <NoteMark />}
-                            <Chip tone={`s-${x.status}`}>{x.status}</Chip>
+                            <Chip tone={`s-${x.status}`}>{STATUS_LABEL[x.status]}</Chip>
                             {working && s.active && <Elapsed start={s.active.start} />}
                             {x.planned && <Chip tone={x.planned < t ? 'warn' : 'accent'}>{fmtDate(x.planned)}</Chip>}
                             {subs.length > 0 && (
@@ -131,6 +132,8 @@ export function TicketDetail({ file, inline }: { file: string; inline?: Inline }
     const when = ticketWhen(tk)
 
     const back = () => (inline ? inline.onBack() : s.setOpenTicket(null))
+    const isDone = tk.done
+    const toggleDone = () => void s.setTicketDone(file, !isDone)
     const keys = {
         ...nav,
         Escape: back,
@@ -147,6 +150,8 @@ export function TicketDetail({ file, inline }: { file: string; inline?: Inline }
         o: () => tk.url && void openUrl(tk.url),
         s: () => (working ? void s.stopWork() : void s.startWork({ kind: 'ticket', ref: tk.file, label: ticketLabel(tk) })),
         t: () => void s.patchTicket(file, { planned: t }).then(() => s.toast('Planned for today')),
+        c: toggleDone,
+        '!': () => void s.patchTicket(file, { pri: !tk.pri }),
         l: () => void s.patchTicket(file, { later: true }),
         f: () => void s.patchTicket(file, { later: false, planned: '' }),
         p: () => void s.patchTicket(file, { planned: addDays(tk.planned > t ? tk.planned : t, 1) }),
@@ -183,9 +188,20 @@ export function TicketDetail({ file, inline }: { file: string; inline?: Inline }
                     <div className="statuses">
                         {STATUSES.map((st, i) => (
                             <button key={st} className={`status-btn ${st}${tk.status === st ? ' on' : ''}`} onClick={() => void s.setStatus(file, st)}>
-                                <span className={`dot ${st}`} /> {st} <kbd>{i + 1}</kbd>
+                                <span className={`dot ${st}`} /> {STATUS_LABEL[st]} <kbd>{i + 1}</kbd>
                             </button>
                         ))}
+                    </div>
+                </div>
+                <div className="ifield">
+                    <span className="ifield-label">State</span>
+                    <div className="seg">
+                        <button className={`status-btn${isDone ? ' on' : ''}`} onClick={toggleDone}>
+                            <span className={`check${isDone ? ' on' : ''}`} /> {isDone ? 'Done' : 'Mark done'} <kbd>c</kbd>
+                        </button>
+                        <button className={`status-btn${tk.pri ? ' on' : ''}`} onClick={() => void s.patchTicket(file, { pri: !tk.pri })}>
+                            <span className="pri">!</span> Priority <kbd>!</kbd>
+                        </button>
                     </div>
                 </div>
                 <div className="ifield">

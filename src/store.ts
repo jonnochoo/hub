@@ -97,6 +97,7 @@ interface State {
     addTicket(input: { key: string; title: string; url: string; planned: string; later?: boolean }): Promise<string>
     patchTicket(file: string, patch: Partial<Ticket>): Promise<void>
     setStatus(file: string, status: Status): Promise<void>
+    setTicketDone(file: string, done: boolean): Promise<void>
     editSubtasks(file: string, fn: (lines: Line[]) => Line[]): Promise<void>
     removeTicket(file: string): Promise<void>
 
@@ -256,7 +257,7 @@ export const useStore = create<State>((set, get) => {
             const done = isRoutine ? line.item.completed !== today() : !line.item.done
             const { active } = get()
             if (done && active && active.kind === kind && active.ref === line.item.text) await get().stopWork()
-            await get().patchItem(kind, id, { done: isRoutine ? false : done, completed: done ? today() : undefined })
+            await get().patchItem(kind, id, { done: isRoutine ? false : done, completed: done ? today() : undefined, doneAt: done ? hhmm(new Date()) : undefined })
             if (done) await logDone(line.item.text)
         },
 
@@ -280,9 +281,12 @@ export const useStore = create<State>((set, get) => {
                 status: 'todo',
                 created: today(),
                 updated: today(),
+                done: false,
+                doneAt: '',
                 planned,
                 at: '',
                 later: !!later && !planned,
+                pri: false,
                 spent: 0,
                 subtasks: [],
                 next: '',
@@ -308,11 +312,19 @@ export const useStore = create<State>((set, get) => {
         async setStatus(file, status) {
             const t = get().tickets.find((x) => x.file === file)
             if (!t || t.status === status) return
-            if (status === 'done' && get().active?.ref === file) await get().stopWork()
-            // Working on it (any status but todo/done) makes it Active: always on Today.
-            const active = status !== 'todo' && status !== 'done'
+            // Working on it (any status but todo) makes it Active: always on Today.
+            const active = status !== 'todo'
             await saveTicket({ ...t, status, planned: active ? '' : t.planned, later: active ? false : t.later })
-            await get().appendLog(`- ${hhmm(new Date())} ${status === 'done' ? '✓ ' : ''}[[${t.key || t.title}]] → ${status}`)
+            await get().appendLog(`- ${hhmm(new Date())} [[${t.key || t.title}]] → ${status}`)
+        },
+
+        // Done is separate from status: a ticket can be deployed + monitoring and still not done.
+        async setTicketDone(file, done) {
+            const t = get().tickets.find((x) => x.file === file)
+            if (!t || t.done === done) return
+            if (done && get().active?.ref === file) await get().stopWork()
+            await saveTicket({ ...t, done, doneAt: done ? hhmm(new Date()) : '' })
+            if (done) await logDone(`[[${t.key || t.title}]]`)
         },
 
         async editSubtasks(file, fn) {
@@ -492,7 +504,7 @@ folder and reloads when files change.
 
 ## Tickets
 
-Frontmatter: \`key\`, \`title\`, \`url\`, \`status\` (todo | in-progress | blocked | review | ready-to-deploy | done),
+Frontmatter: \`key\`, \`title\`, \`url\`, \`status\` (todo | in-progress | blocked | review | ready-to-deploy | deployed-monitoring), \`done: true\` (finished; separate from status; old \`status: done\` files are read as done + deployed-monitoring),
 \`created\`, \`updated\`, \`planned\` (the day I intend to work on it), \`later: true\` (parked), \`spent\` (minutes clocked).
 With neither \`planned\` nor \`later\` set the ticket is Active: always on Today until done. \`planned\` shows it on Today from that day; \`later\` parks it.
 Moving a ticket to in-progress, blocked, review or ready-to-deploy makes it Active.

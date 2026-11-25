@@ -30,7 +30,7 @@ export function timedToday(tickets: Ticket[], lists: Record<ListKind, Line[]>, d
     const dow = fromIso(date).getDay()
     for (const t of tickets) {
         if (!t.at || t.later || t.planned !== date) continue
-        out.push({ key: timedKey(date, 'ticket', t.file, t.at), kind: 'ticket', ref: t.file, id: '', label: t.key ? `${t.key} ${t.title}` : t.title, at: t.at, mins: minOf(t.at), done: t.status === 'done' })
+        out.push({ key: timedKey(date, 'ticket', t.file, t.at), kind: 'ticket', ref: t.file, id: '', label: t.key ? `${t.key} ${t.title}` : t.title, at: t.at, mins: minOf(t.at), done: t.done })
     }
     for (const kind of TIMED_LISTS) {
         for (const l of lists[kind]) {

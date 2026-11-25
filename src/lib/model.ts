@@ -35,8 +35,16 @@ export function serializeNotes(notes: TicketNote[]): string {
         .join('\n\n')
 }
 
-export const STATUSES = ['todo', 'in-progress', 'blocked', 'review', 'ready-to-deploy', 'done'] as const
+export const STATUSES = ['todo', 'in-progress', 'blocked', 'review', 'ready-to-deploy', 'deployed-monitoring'] as const
 export type Status = (typeof STATUSES)[number]
+export const STATUS_LABEL: Record<Status, string> = {
+    todo: 'todo',
+    'in-progress': 'in-progress',
+    blocked: 'blocked',
+    review: 'review',
+    'ready-to-deploy': 'ready-to-deploy',
+    'deployed-monitoring': 'deployed + monitoring',
+}
 
 export interface Ticket {
     file: string // path inside the vault, e.g. tickets/ABC-123.md
@@ -46,9 +54,12 @@ export interface Ticket {
     status: Status
     created: string
     updated: string
+    done: boolean // finished, independent of status (like a task's checkbox)
+    doneAt: string // time of day 'HH:MM' it was marked done ('' = unknown)
     planned: string // the day I intend to work on it ('' = none)
     at: string // time of day 'HH:MM' for a Today reminder ('' = none). Only alerts on the planned day
     later: boolean // parked. No planned date and not later = active (always on Today)
+    pri: boolean // priority, same ! flag as tasks
     spent: number // minutes clocked
     subtasks: Line[]
     next: string // what to do next; shown on Today
@@ -56,7 +67,7 @@ export interface Ticket {
     extra: Record<string, string> // unknown frontmatter, preserved for agents/humans
 }
 
-const KNOWN = ['key', 'title', 'url', 'status', 'created', 'updated', 'planned', 'at', 'later', 'spent', 'next']
+const KNOWN = ['key', 'title', 'url', 'status', 'created', 'updated', 'planned', 'at', 'done', 'doneAt', 'later', 'priority', 'spent', 'next']
 
 export function parseTicket(file: string, src: string): Ticket {
     const { fm, body } = parseDoc(src)
@@ -64,7 +75,9 @@ export function parseTicket(file: string, src: string): Ticket {
     const extra: Record<string, string> = {}
     for (const [k, v] of Object.entries(fm)) if (!KNOWN.includes(k)) extra[k] = v
     const h1 = body.match(/^# (.+)$/m)?.[1]
-    const status = (STATUSES as readonly string[]).includes(fm.status) ? (fm.status as Status) : 'todo'
+    const legacyDone = fm.status === 'done' // before done became its own flag
+    const raw = legacyDone ? 'deployed-monitoring' : fm.status
+    const status = (STATUSES as readonly string[]).includes(raw) ? (raw as Status) : 'todo'
     return {
         file,
         key: fm.key ?? '',
@@ -73,9 +86,12 @@ export function parseTicket(file: string, src: string): Ticket {
         status,
         created: fm.created || today(),
         updated: fm.updated || fm.created || today(),
+        done: legacyDone || fm.done === 'true',
+        doneAt: /^\d{2}:\d{2}$/.test(fm.doneAt ?? '') ? fm.doneAt : '',
         planned: /^\d{4}-\d{2}-\d{2}$/.test(fm.planned ?? '') ? fm.planned : '',
         at: /^\d{2}:\d{2}$/.test(fm.at ?? '') ? fm.at : '',
         later: fm.later === 'true' || fm.planned === 'later',
+        pri: fm.priority === 'true',
         spent: Number(fm.spent) || 0,
         subtasks: parseList(sub.lines.join('\n')),
         next: fm.next ?? '',
@@ -94,7 +110,10 @@ export function serializeTicket(t: Ticket): string {
         updated: t.updated,
         planned: t.planned,
         at: t.at,
+        done: t.done ? 'true' : '',
+        doneAt: t.done ? t.doneAt : '',
         later: t.later ? 'true' : '',
+        priority: t.pri ? 'true' : '',
         spent: t.spent ? String(t.spent) : '',
         next: t.next,
         ...t.extra,

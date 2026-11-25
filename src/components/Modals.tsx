@@ -244,7 +244,7 @@ export const SHORTCUTS: { group: string; keys: [string, string][] }[] = [
     {
         group: 'Tickets',
         keys: [
-            ['1 – 6', 'Status (Tickets and Today): todo / in-progress / blocked / review / ready-to-deploy / done'],
+            ['1 – 6', 'Status (Tickets and Today): todo / in-progress / blocked / review / ready-to-deploy / deployed + monitoring. Done is separate: c marks a ticket done'],
             ['l / f / d / t', 'Ticket When: Later, f = Focus (Active, always on Today), pick a date, date = today. New tickets start Active; starting work or moving to in-progress / blocked / review / ready-to-deploy makes a ticket Active'],
             ['Enter', 'Open ticket'],
             ['Esc', 'Back to list'],

@@ -492,7 +492,8 @@ h4.group.sub {
     background: var(--ok);
     opacity: 0.6;
 }
-.dot.done {
+.dot.done,
+.dot.deployed-monitoring {
     background: var(--ok);
 }
 .chip {
@@ -859,7 +860,7 @@ h4.group.sub {
     color: var(--ok);
     border-color: color-mix(in srgb, var(--ok) 55%, transparent);
 }
-.chip.s-done {
+.chip.s-deployed-monitoring {
     color: var(--ok);
 }
 

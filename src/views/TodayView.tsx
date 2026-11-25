@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { MAX_POSTITS, useStore } from '../store'
 import { addDays, daysBetween, fmtDate, fmtMins, fmtTime12, fromIso, logTime12, today } from '../lib/dates'
 import { itemsOf, onDay, type Item, type ItemLine } from '../lib/md'
-import { parseBookmarkInput, parseBookmarks, serializeBookmarks, STATUSES, ticketLabel, type ListKind, type Status, type Ticket } from '../lib/model'
+import { parseBookmarkInput, parseBookmarks, serializeBookmarks, STATUS_LABEL, STATUSES, ticketLabel, type ListKind, type Status, type Ticket } from '../lib/model'
 import { useHotkeys } from '../lib/hotkeys'
 import { promptDate, promptText, promptTime } from '../lib/prompts'
 import { timedKey, useReminders } from '../lib/reminders'
@@ -27,21 +27,28 @@ const SECTION_TITLE: Record<Section, string> = {
     done: 'Completed today',
 }
 const atOf = (r: TRow) => (r.kind === 'ticket' ? r.t.at : r.item.at) || '99:99'
-const WAITING: FocusGroup[] = ['blocked', 'review', 'ready-to-deploy']
-const isDoneRow = (r: TRow) => (r.kind === 'ticket' ? r.t.status === 'done' : r.list !== 'routine' && r.item.done)
+const WAITING: FocusGroup[] = ['blocked', 'review', 'ready-to-deploy', 'deployed-monitoring']
+const isDoneRow = (r: TRow) => (r.kind === 'ticket' ? r.t.done : r.list !== 'routine' && r.item.done)
 const sectionOf = (r: TRow): Section =>
     isDoneRow(r) ? 'done' : r.kind === 'ticket' ? (WAITING.includes(r.t.status) ? 'waiting' : 'focus') : r.list === 'tasks' ? 'focus' : r.list
 
+/** HH:MM a row was completed today (earlier-than-known completions sort first), or null if it is not done. */
+const finishedAt = (r: TRow, day: string): string | null => {
+    if (r.kind === 'ticket') return r.t.done ? r.t.doneAt || '00:00' : null
+    const done = r.list === 'routine' ? r.item.completed === day : r.item.done
+    return done ? r.item.doneAt || '00:00' : null
+}
+
 // Focus is grouped by ticket status, with due tasks last.
 type FocusGroup = Status | 'tasks'
-const FOCUS_ORDER: FocusGroup[] = ['in-progress', 'blocked', 'review', 'ready-to-deploy', 'todo', 'tasks']
+const FOCUS_ORDER: FocusGroup[] = ['in-progress', 'blocked', 'review', 'ready-to-deploy', 'deployed-monitoring', 'todo', 'tasks']
 const FOCUS_LABEL: Record<FocusGroup, string> = {
     'in-progress': 'In progress',
     blocked: 'Blocked',
     review: 'Review',
     'ready-to-deploy': 'Ready to deploy',
     todo: 'Todo',
-    done: 'Done',
+    'deployed-monitoring': 'Deployed + monitoring',
     tasks: 'Tasks due',
 }
 const focusGroupOf = (r: TRow): FocusGroup => (r.kind === 'ticket' ? r.t.status : 'tasks')
@@ -116,12 +123,12 @@ export function TodayView() {
 
         const focus: TRow[] = []
         for (const tk of s.tickets) {
-            if (tk.status === 'done') continue
+            if (tk.done) continue
             if (!tk.later && (!tk.planned || tk.planned <= t)) focus.push({ kind: 'ticket', key: tk.file, t: tk, date: tk.planned || t })
         }
         for (const l of s.lists.tasks)
             if (l.item && !l.item.done && !l.item.later && (!l.item.due || l.item.due <= t)) focus.push({ kind: 'item', list: 'tasks', key: l.id, id: l.id, item: l.item, date: l.item.due || t })
-        const weight = (r: TRow) => (r.kind === 'item' && r.item.pri ? 0 : 1)
+        const weight = (r: TRow) => ((r.kind === 'item' ? r.item.pri : r.t.pri) ? 0 : 1)
         focus.sort(
             (a, b) =>
                 FOCUS_ORDER.indexOf(focusGroupOf(a)) - FOCUS_ORDER.indexOf(focusGroupOf(b)) || weight(a) - weight(b) || atOf(a).localeCompare(atOf(b)) || a.date.localeCompare(b.date)
@@ -136,7 +143,7 @@ export function TodayView() {
         // Completed today, only when the toggle is on.
         const finished: TRow[] = []
         if (showDone) {
-            for (const tk of s.tickets) if (tk.status === 'done' && tk.updated === t) finished.push({ kind: 'ticket', key: tk.file, t: tk, date: t })
+            for (const tk of s.tickets) if (tk.done && tk.updated === t) finished.push({ kind: 'ticket', key: tk.file, t: tk, date: t })
             for (const list of ['tasks', 'questions', 'learn'] as const)
                 for (const l of s.lists[list]) if (l.item && l.item.done && l.item.completed === t) finished.push({ kind: 'item', list, key: l.id, id: l.id, item: l.item, date: t })
         }
@@ -146,11 +153,15 @@ export function TodayView() {
         const waiting = focus.filter((r) => sectionOf(r) === 'waiting')
         const grouped = [...routineShown, ...active, ...dueOf('questions'), ...dueOf('learn'), ...finished, ...waiting]
         if (mode === 'grouped') return grouped
-        // Straight list: done last, timed first, then by type; manual order (J / K) wins once set.
-        const rank = (r: TRow) => (isDoneRow(r) ? 9 : r.kind === 'ticket' ? 0 : TYPE_RANK[r.list])
+        // Straight list: completed first (by completion time), then timed, then by type; manual order (J / K) wins once set.
         const base = grouped
             .map((r, i) => ({ r, i }))
-            .sort((a, b) => Number(isDoneRow(a.r)) - Number(isDoneRow(b.r)) || atOf(a.r).localeCompare(atOf(b.r)) || rank(a.r) - rank(b.r) || a.i - b.i)
+            .sort((a, b) => {
+                const fa = finishedAt(a.r, t)
+                const fb = finishedAt(b.r, t)
+                if (fa !== null || fb !== null) return fa === null ? 1 : fb === null ? -1 : fa.localeCompare(fb) || a.i - b.i
+                return atOf(a.r).localeCompare(atOf(b.r)) || (a.r.kind === 'ticket' ? 0 : TYPE_RANK[a.r.list]) - (b.r.kind === 'ticket' ? 0 : TYPE_RANK[b.r.list]) || a.i - b.i
+            })
             .map((x) => x.r)
         if (order.length === 0) return base
         const pos = (r: TRow) => { const p = order.indexOf(r.key); return p < 0 ? Infinity : p }
@@ -206,7 +217,7 @@ export function TodayView() {
             saveOrder([])
             s.toast('Order reset: by time, then type')
         },
-        x: () => (row?.kind === 'ticket' ? void s.setStatus(row.t.file, 'done') : row && void s.toggleItem(row.list, row.id)),
+        x: () => (row?.kind === 'ticket' ? void s.setTicketDone(row.t.file, !row.t.done) : row && void s.toggleItem(row.list, row.id)),
         // Same keys as the detail views, applied to the highlighted row.
         l: () => {
             if (!row || (row.kind === 'item' && row.list === 'routine')) return
@@ -242,7 +253,7 @@ export function TodayView() {
         s: () => row && void start(row),
         c: () => {
             if (!row) return
-            if (row.kind === 'ticket') void s.setStatus(row.t.file, 'done')
+            if (row.kind === 'ticket') void s.setTicketDone(row.t.file, !row.t.done)
             else void s.toggleItem(row.list, row.id)
         },
         p: () => {
@@ -274,7 +285,10 @@ export function TodayView() {
             useReminders.getState().snooze([tm.key])
             s.toast('Snoozed 10 minutes')
         },
-        '!': () => row?.kind === 'item' && row.list !== 'routine' && void s.patchItem(row.list, row.id, { pri: !row.item.pri }),
+        '!': () => {
+            if (row?.kind === 'ticket') void s.patchTicket(row.t.file, { pri: !row.t.pri })
+            else if (row?.kind === 'item' && row.list !== 'routine') void s.patchItem(row.list, row.id, { pri: !row.item.pri })
+        },
         // n: notes of the highlighted row (opens its page, editing notes). i: Today's daily notes.
         n: () => {
             if (!row) return document.getElementById('notes-today-view')?.click()
@@ -288,7 +302,7 @@ export function TodayView() {
             STATUSES.map((st, i) => [
                 String(i + 1),
                 () => {
-                    if (row?.kind === 'ticket') return void s.setStatus(row.t.file, st).then(() => s.toast(`${row.t.key || row.t.title} → ${st}`))
+                    if (row?.kind === 'ticket') return void s.setStatus(row.t.file, st).then(() => s.toast(`${row.t.key || row.t.title} → ${STATUS_LABEL[st]}`))
                     if (i < 2 && postits[i]) void s.toggleItem('reminders', postits[i].id)
                 },
             ])
@@ -371,14 +385,16 @@ export function TodayView() {
                                     {subHead}
                                     <Row selected={i === cur} working={working} ringing={!!tm && ringing.includes(tm.key)} type="ticket" onClick={() => setC(i)} onDoubleClick={() => { setC(i); setInPanel(true) }}>
                                         <TypeIcon kind="ticket" />
+                                        {r.t.pri && <span className="pri">!</span>}
                                         {r.t.key && <span className="key">{r.t.key}</span>}
                                         <span className="title-block tight">
-                                            <span className={`title${r.t.status === 'done' ? ' done' : ''}`}>{r.t.title}</span>
+                                            <span className={`title${r.t.done ? ' done' : ''}`}>{r.t.title}</span>
                                             {detail && <span className="note-preview">{detail}</span>}
                                         </span>
                                         {r.t.notes.length > 0 && <NoteMark />}
                                         {working && s.active && <Elapsed start={s.active.start} />}
                                         {tm && <TimeChip kind="ticket" refKey={tm.ref} at={tm.at} />}
+                                        {r.t.done && r.t.doneAt && <Chip>✓ {fmtTime12(r.t.doneAt)}</Chip>}
                                         {rolled && <Chip tone="warn">from {fmtDate(r.date)}</Chip>}
                                         {subs.length > 0 && (
                                             <Chip>
@@ -386,7 +402,7 @@ export function TodayView() {
                                             </Chip>
                                         )}
                                         {r.t.spent > 0 && <Chip>⏱ {fmtMins(r.t.spent)}</Chip>}
-                                        <Chip tone={`s-${r.t.status}`}>{r.t.status}</Chip>
+                                        <Chip tone={`s-${r.t.status}`}>{STATUS_LABEL[r.t.status]}</Chip>
                                     </Row>
                                 </div>
                             )
@@ -410,6 +426,7 @@ export function TodayView() {
                                     {r.item.notes.some((n) => n.trim()) && <NoteMark />}
                                     {working && s.active && <Elapsed start={s.active.start} />}
                                     {tm && <TimeChip kind={tm.kind} refKey={tm.ref} at={tm.at} done={done} />}
+                                    {done && r.item.doneAt && <Chip>✓ {fmtTime12(r.item.doneAt)}</Chip>}
                                     {rolled && r.list !== 'routine' && <Chip tone="warn">due {fmtDate(r.date)}</Chip>}
                                 </Row>
                             </div>
@@ -478,7 +495,7 @@ function TodayExtras({ postits }: { postits: ItemLine[] }) {
     const prevDate = s.dailyDates.find((d) => d < t)
     const prev = prevDate ? s.dailies[prevDate] : undefined
     const stale = s.tickets
-        .filter((tk) => tk.status !== 'done' && daysBetween(tk.updated, t) >= 4)
+        .filter((tk) => !tk.done && daysBetween(tk.updated, t) >= 4)
         .sort((a, b) => a.updated.localeCompare(b.updated))
         .slice(0, 4)
     return (
