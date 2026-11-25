@@ -102,7 +102,7 @@ export default function App() {
     const todayIso = today()
     const todayDow = fromIso(todayIso).getDay()
     const openCount = (id: ViewId): number => {
-        if (id === 'tickets') return s.tickets.filter((tk) => tk.status !== 'done').length
+        if (id === 'tickets') return s.tickets.filter((tk) => !tk.done).length
         if (id === 'routine') return itemsOf(s.lists.routine).filter((l) => onDay(l.item, todayDow) && l.item.completed !== todayIso).length
         if (id === 'tasks' || id === 'questions' || id === 'learn' || id === 'ideas') return itemsOf(s.lists[id]).filter((l) => !l.item.done).length
         return 0
