@@ -226,6 +226,8 @@ export const SHORTCUTS: { group: string; keys: [string, string][] }[] = [
             ['i', '(Today) edit the day\'s notes'],
             ['w', '(ticket page) edit its Next line. (Today) set a reminder time on the highlighted row: 2pm, 14:30, +30m; empty clears'],
             ['z', '(Today) snooze the highlighted row reminder 10 minutes'],
+            ['v', '(Today) switch Active between a straight list and grouped by type'],
+            ['J / K / V', '(Today list view) move the highlighted row down / up; V resets to time, then type'],
             ['Z / X', '(when a reminder is ringing) snooze all 10 minutes / dismiss all'],
             ['d', 'Set due / plan date  (today, tom, mon, +3, +2w, 25 dec)'],
             ['t', 'Plan for today'],

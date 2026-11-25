@@ -46,12 +46,48 @@ const FOCUS_LABEL: Record<FocusGroup, string> = {
 }
 const focusGroupOf = (r: TRow): FocusGroup => (r.kind === 'ticket' ? r.t.status : 'tasks')
 
+type ViewMode = 'list' | 'grouped'
+const MODE_KEY = 'hub.todayMode'
+const ORDER_KEY = 'hub.todayOrder'
+const TYPE_RANK = { tasks: 1, routine: 2, questions: 3, learn: 4 } as const
+const lsGet = (k: string) => {
+    try {
+        return localStorage.getItem(k)
+    } catch {
+        return null
+    }
+}
+const lsSet = (k: string, v: string) => {
+    try {
+        localStorage.setItem(k, v)
+    } catch {
+        /* ignore */
+    }
+}
+
 export function TodayView() {
     const s = useStore()
     const t = today()
     const timed = useTimedToday()
     const timedKeys = useMemo(() => new Set(timed.map((x) => x.key)), [timed])
-    const [showDone, setShowDone] = useState(false)
+    const [showDone, setShowDone] = useState(true)
+    const [mode, setModeState] = useState<ViewMode>(() => lsGet(MODE_KEY) === 'grouped' ? 'grouped' : 'list')
+    const [order, setOrder] = useState<string[]>(() => {
+        try {
+            const v = JSON.parse(lsGet(ORDER_KEY) ?? '[]')
+            return Array.isArray(v) ? v : []
+        } catch {
+            return []
+        }
+    })
+    const setMode = (m: ViewMode) => {
+        setModeState(m)
+        lsSet(MODE_KEY, m)
+    }
+    const saveOrder = (o: string[]) => {
+        setOrder(o)
+        lsSet(ORDER_KEY, JSON.stringify(o))
+    }
     const ringing = useReminders((r) => r.ringing)
     // Is this row's time live today, and is it ringing right now?
     const timeOf = (r: TRow) => {
@@ -75,8 +111,8 @@ export function TodayView() {
         const routine: TRow[] = []
         for (const l of s.lists.routine) if (l.item && onDay(l.item, fromIso(t).getDay())) routine.push({ kind: 'item', list: 'routine', key: l.id, id: l.id, item: l.item, date: t })
         routine.sort((a, b) => atOf(a).localeCompare(atOf(b)))
-        // Once every routine item is ticked off, the section goes away (unless completed are shown).
-        const routineShown = showDone || routine.some((r) => r.kind === 'item' && r.item.completed !== t) ? routine : []
+        // Completed routine items stay (struck through) unless completed are hidden.
+        const routineShown = showDone ? routine : routine.filter((r) => r.kind === 'item' && r.item.completed !== t)
 
         const focus: TRow[] = []
         for (const tk of s.tickets) {
@@ -108,8 +144,18 @@ export function TodayView() {
         // Column order: everything active first, then the "waiting" tickets that live in the third column.
         const active = focus.filter((r) => sectionOf(r) === 'focus')
         const waiting = focus.filter((r) => sectionOf(r) === 'waiting')
-        return [...routineShown, ...active, ...dueOf('questions'), ...dueOf('learn'), ...finished, ...waiting]
-    }, [s.tickets, s.lists, t, showDone])
+        const grouped = [...routineShown, ...active, ...dueOf('questions'), ...dueOf('learn'), ...finished, ...waiting]
+        if (mode === 'grouped') return grouped
+        // Straight list: done last, timed first, then by type; manual order (J / K) wins once set.
+        const rank = (r: TRow) => (isDoneRow(r) ? 9 : r.kind === 'ticket' ? 0 : TYPE_RANK[r.list])
+        const base = grouped
+            .map((r, i) => ({ r, i }))
+            .sort((a, b) => Number(isDoneRow(a.r)) - Number(isDoneRow(b.r)) || atOf(a.r).localeCompare(atOf(b.r)) || rank(a.r) - rank(b.r) || a.i - b.i)
+            .map((x) => x.r)
+        if (order.length === 0) return base
+        const pos = (r: TRow) => { const p = order.indexOf(r.key); return p < 0 ? Infinity : p }
+        return base.map((r, i) => ({ r, i })).sort((a, b) => pos(a.r) - pos(b.r) || a.i - b.i).map((x) => x.r)
+    }, [s.tickets, s.lists, t, showDone, mode, order])
 
     const { cur, setC, nav } = useCursor(rows.length)
     const row = rows[cur]
@@ -138,11 +184,28 @@ export function TodayView() {
             ? s.startWork({ kind: 'ticket', ref: r.t.file, label: ticketLabel(r.t) })
             : s.startWork({ kind: r.list as ListKind, ref: r.item.text, label: r.item.text })
 
+    // Manual reorder (list mode): freeze the visible order, then swap with the neighbour.
+    const moveRow = (d: 1 | -1) => {
+        if (mode !== 'list') return s.toast('Reordering needs list view (v)')
+        const j = cur + d
+        if (!row || j < 0 || j >= rows.length) return
+        const keys = rows.map((r) => r.key)
+        ;[keys[cur], keys[j]] = [keys[j], keys[cur]]
+        saveOrder(keys)
+    }
+
     const listKeys = {
         ...nav,
         Enter: focusPanel,
         e: () => row && document.getElementById(row.kind === 'ticket' ? 'f-title' : 'f-text')?.focus(),
         H: () => setShowDone((v) => !v),
+        v: () => setMode(mode === 'list' ? 'grouped' : 'list'),
+        J: () => moveRow(1),
+        K: () => moveRow(-1),
+        V: () => {
+            saveOrder([])
+            s.toast('Order reset: by time, then type')
+        },
         x: () => (row?.kind === 'ticket' ? void s.setStatus(row.t.file, 'done') : row && void s.toggleItem(row.list, row.id)),
         // Same keys as the detail views, applied to the highlighted row.
         l: () => {
@@ -271,7 +334,7 @@ export function TodayView() {
                         const sec = sectionOf(r)
                         const prevRow = list[n - 1]?.r
                         const head =
-                            !prevRow || sectionOf(prevRow) !== sec ? (
+                            mode === 'grouped' && (!prevRow || sectionOf(prevRow) !== sec) ? (
                                 <h3 className="group">
                                     {SECTION_TITLE[sec]}
                                     {sec === 'routine' && (
@@ -284,7 +347,7 @@ export function TodayView() {
                             ) : null
                         const fg = sec === 'focus' || sec === 'waiting' ? focusGroupOf(r) : null
                         const subHead =
-                            fg && (!prevRow || sectionOf(prevRow) !== 'focus' || focusGroupOf(prevRow) !== fg) ? (
+                            mode === 'grouped' && fg && (!prevRow || sectionOf(prevRow) !== 'focus' || focusGroupOf(prevRow) !== fg) ? (
                                 <h4 className="group sub">{FOCUS_LABEL[fg]}</h4>
                             ) : null
                         const rolled = r.date < t
@@ -310,7 +373,7 @@ export function TodayView() {
                                         <TypeIcon kind="ticket" />
                                         {r.t.key && <span className="key">{r.t.key}</span>}
                                         <span className="title-block tight">
-                                            <span className="title">{r.t.title}</span>
+                                            <span className={`title${r.t.status === 'done' ? ' done' : ''}`}>{r.t.title}</span>
                                             {detail && <span className="note-preview">{detail}</span>}
                                         </span>
                                         {r.t.notes.length > 0 && <NoteMark />}
@@ -367,7 +430,10 @@ export function TodayView() {
                     <div className="work-list">
                     <h2 className="col-title">
                         Active <span className="muted">(w sets a time)</span>
-                        <button className={`toggle-done${showDone ? ' on' : ''}`} onClick={() => setShowDone((v) => !v)} title="Show tasks completed today (H)">
+                        <button className="toggle-done" onClick={() => setMode(mode === 'list' ? 'grouped' : 'list')} title="Switch list / grouped view (v). In list view J / K reorder, V resets">
+                            {mode === 'list' ? 'Grouped' : 'List'} view
+                        </button>
+                        <button className={`toggle-done${showDone ? ' on' : ''}`} onClick={() => setShowDone((v) => !v)} title="Show / hide items completed today (H)">
                             {showDone ? 'Hide' : 'Show'} completed today
                         </button>
                     </h2>
