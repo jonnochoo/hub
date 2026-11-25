@@ -117,7 +117,10 @@ function TicketList() {
     )
 }
 
-export function TicketDetail({ file }: { file: string }) {
+/** `inline`: shown in a side panel instead of a modal; keys only fire while `active`. */
+export type Inline = { active: boolean; onBack: () => void }
+
+export function TicketDetail({ file, inline }: { file: string; inline?: Inline }) {
     const s = useStore()
     const tk = s.tickets.find((x) => x.file === file) as Ticket
     const subs = itemsOf(tk.subtasks)
@@ -127,10 +130,11 @@ export function TicketDetail({ file }: { file: string }) {
     const working = s.active?.kind === 'ticket' && s.active.ref === tk.file
     const when = ticketWhen(tk)
 
-    useHotkeys({
+    const back = () => (inline ? inline.onBack() : s.setOpenTicket(null))
+    const keys = {
         ...nav,
-        Escape: () => s.setOpenTicket(null),
-        h: () => s.setOpenTicket(null),
+        Escape: back,
+        h: back,
         x: () => sub && void s.editSubtasks(file, (ls) => mapItem(ls, sub.id, (it) => ({ ...it, done: !it.done }))),
         Enter: () => sub && void s.editSubtasks(file, (ls) => mapItem(ls, sub.id, (it) => ({ ...it, done: !it.done }))),
         a: () => document.getElementById('f-sub')?.focus(),
@@ -154,7 +158,8 @@ export function TicketDetail({ file }: { file: string }) {
             if (confirm(`Delete ${ticketLabel(tk)}?`)) void s.removeTicket(file)
         },
         ...Object.fromEntries(STATUSES.map((st, i) => [String(i + 1), () => void s.setStatus(file, st)])),
-    }, { modal: true })
+    }
+    useHotkeys(inline && !inline.active ? {} : keys, { modal: !inline })
 
     return (
         <div className="page detail">

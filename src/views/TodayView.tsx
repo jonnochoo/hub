@@ -10,6 +10,8 @@ import { openUrl } from '../lib/fs'
 import { Chip, Empty, NoteMark, NotesField, openFirstUrl, PageHeader, Rich, Row, TypeIcon, useCursor } from '../components/ui'
 import { Elapsed } from '../components/Elapsed'
 import { ScheduleStrip, TimeChip, useTimedToday } from '../components/Reminders'
+import { TicketDetail } from './TicketsView'
+import { ItemDetail } from './ListView'
 
 type Section = 'routine' | 'focus' | 'questions' | 'learn' | 'waiting' | 'done'
 type TRow =
@@ -111,6 +113,9 @@ export function TodayView() {
 
     const { cur, setC, nav } = useCursor(rows.length)
     const row = rows[cur]
+    // inPanel: keys go to the detail panel on the right; Esc returns to the list.
+    const [inPanel, setInPanel] = useState(false)
+    const focusPanel = () => row && setInPanel(true)
 
     // The cursor is an index, so when a status change moves a row to another group the
     // highlight would land on a different row. Follow the row by key instead.
@@ -126,7 +131,6 @@ export function TodayView() {
     })
     const postits = itemsOf(s.lists.reminders).filter((l) => !l.item.done).slice(0, MAX_POSTITS)
     const routineRows = rows.filter((r) => sectionOf(r) === 'routine')
-    const colRows = (waiting: boolean) => rows.map((r, i) => ({ r, i })).filter(({ r }) => (sectionOf(r) === 'waiting') === waiting)
     const routineDone = routineRows.filter((r) => r.kind === 'item' && r.item.completed === t).length
 
     const start = (r: TRow) =>
@@ -134,20 +138,10 @@ export function TodayView() {
             ? s.startWork({ kind: 'ticket', ref: r.t.file, label: ticketLabel(r.t) })
             : s.startWork({ kind: r.list as ListKind, ref: r.item.text, label: r.item.text })
 
-    useHotkeys({
+    const listKeys = {
         ...nav,
-        Enter: () => {
-            if (!row) return
-            if (row.kind === 'ticket') s.setOpenTicket(row.t.file)
-            else s.openItemById(row.list, row.id)
-        },
-        e: () => {
-            if (!row) return
-            // Open the main detail page with the name field focused.
-            if (row.kind === 'ticket') s.setOpenTicket(row.t.file)
-            else s.openItemById(row.list, row.id)
-            setTimeout(() => document.getElementById(row.kind === 'ticket' ? 'f-title' : 'f-text')?.focus(), 50)
-        },
+        Enter: focusPanel,
+        e: () => row && document.getElementById(row.kind === 'ticket' ? 'f-title' : 'f-text')?.focus(),
         H: () => setShowDone((v) => !v),
         x: () => (row?.kind === 'ticket' ? void s.setStatus(row.t.file, 'done') : row && void s.toggleItem(row.list, row.id)),
         // Same keys as the detail views, applied to the highlighted row.
@@ -221,9 +215,7 @@ export function TodayView() {
         // n: notes of the highlighted row (opens its page, editing notes). i: Today's daily notes.
         n: () => {
             if (!row) return document.getElementById('notes-today-view')?.click()
-            if (row.kind === 'ticket') s.setOpenTicket(row.t.file)
-            else s.openItemById(row.list, row.id)
-            setTimeout(() => document.getElementById(row.kind === 'ticket' ? 'notes-new-view' : 'notes-detail-view')?.click(), 50)
+            document.getElementById(row.kind === 'ticket' ? 'notes-new-view' : 'notes-detail-view')?.click()
         },
         i: () => document.getElementById('notes-today-view')?.click(),
         m: () => s.setModal({ type: 'add', kind: 'reminder' }),
@@ -265,17 +257,14 @@ export function TodayView() {
                 allowEmpty: true,
                 hint: 'One per line: - [Title](url). Reorder or delete lines; the first 9 get keys b 1 to b 9',
             }),
-    })
+    }
+    // While the panel has focus its own keys (subtasks, fields, status...) take over.
+    useHotkeys(inPanel && row ? {} : listKeys)
+    useEffect(() => {
+        if (!row) setInPanel(false)
+    }, [row])
 
-    const todayLog = s.dailies[t]?.log ?? []
-    const clocked = todayLog.reduce((sum, l) => sum + Number(l.match(/^- \d\d:\d\d–\d\d:\d\d \((\d+)m\)/)?.[1] ?? 0), 0)
-    const prevDate = s.dailyDates.find((d) => d < t)
-    const prev = prevDate ? s.dailies[prevDate] : undefined
-
-    const stale = s.tickets
-        .filter((tk) => tk.status !== 'done' && daysBetween(tk.updated, t) >= 4)
-        .sort((a, b) => a.updated.localeCompare(b.updated))
-        .slice(0, 4)
+    const clocked = (s.dailies[t]?.log ?? []).reduce((sum, l) => sum + Number(l.match(/^- \d\d:\d\d–\d\d:\d\d \((\d+)m\)/)?.[1] ?? 0), 0)
 
     const renderRows = (list: { r: TRow; i: number }[]) =>
         list.map(({ r, i }, n) => {
@@ -317,7 +306,7 @@ export function TodayView() {
                                 <div key={r.key}>
                                     {head}
                                     {subHead}
-                                    <Row selected={i === cur} working={working} ringing={!!tm && ringing.includes(tm.key)} type="ticket" onClick={() => setC(i)} onDoubleClick={() => s.setOpenTicket(r.t.file)}>
+                                    <Row selected={i === cur} working={working} ringing={!!tm && ringing.includes(tm.key)} type="ticket" onClick={() => setC(i)} onDoubleClick={() => { setC(i); setInPanel(true) }}>
                                         <TypeIcon kind="ticket" />
                                         {r.t.key && <span className="key">{r.t.key}</span>}
                                         <span className="title-block tight">
@@ -348,7 +337,7 @@ export function TodayView() {
                             <div key={r.key}>
                                 {head}
                                 {subHead}
-                                <Row selected={i === cur} working={working} ringing={!!tm && ringing.includes(tm.key)} type={iconKind} onClick={() => setC(i)} onDoubleClick={() => s.openItemById(r.list, r.id)}>
+                                <Row selected={i === cur} working={working} ringing={!!tm && ringing.includes(tm.key)} type={iconKind} onClick={() => setC(i)} onDoubleClick={() => { setC(i); setInPanel(true) }}>
                                     <TypeIcon kind={iconKind} />
                                     <span className={`check${done ? ' on' : ''}`} onClick={() => void s.toggleItem(r.list, r.id)} />
                                     <span className={`title${done ? ' done' : ''}`}>
@@ -372,7 +361,8 @@ export function TodayView() {
 
             <div className="today-cols">
                 {/* ---- work ------------------------------------------------ */}
-                <div className="col">
+                <div className="col col-work">
+                    <div className="work-list">
                     <h2 className="col-title">
                         Active <span className="muted">(w sets a time)</span>
                         <button className={`toggle-done${showDone ? ' on' : ''}`} onClick={() => setShowDone((v) => !v)} title="Show tasks completed today (H)">
@@ -385,25 +375,48 @@ export function TodayView() {
                             Nothing due today. Press <kbd>a</kbd> to add a task, or plan a ticket with <kbd>t</kbd>.
                         </Empty>
                     )}
-                    {renderRows(colRows(false))}
+                    {renderRows(rows.map((r, i) => ({ r, i })))}
+                    </div>
+                    <div className="today-notes-wrap">
+                        <h2 className="col-title">
+                            Daily notes <span className="muted">(i)</span>
+                        </h2>
+                        <TodayNotes date={t} />
+                    </div>
                 </div>
 
-                {/* ---- notes ----------------------------------------------- */}
-                <div className="col col-notes">
-                    <h2 className="col-title">
-                        Notes <span className="muted">(i)</span>
-                    </h2>
-                    <TodayNotes date={t} />
-                    <Bookmarks />
-                </div>
-
-                {/* ---- log ------------------------------------------------- */}
-                <div className="col col-log">
-                    {colRows(true).length > 0 && (
-                        <>
-                            <div className="col-waiting">{renderRows(colRows(true))}</div>
-                        </>
+                {/* ---- detail panel: follows the cursor --------------------- */}
+                <div className={`col col-panel${inPanel ? ' focused' : ''}`}>
+                    {row?.kind === 'ticket' && <TicketDetail key={row.key} file={row.t.file} inline={{ active: inPanel, onBack: () => setInPanel(false) }} />}
+                    {row?.kind === 'item' && s.lists[row.list].some((l) => l.id === row.id) && (
+                        <ItemDetail
+                            key={row.key}
+                            kind={row.list}
+                            index={s.lists[row.list].findIndex((l) => l.id === row.id)}
+                            inline={{ active: inPanel, onBack: () => setInPanel(false) }}
+                        />
                     )}
+                    {!row && <TodayExtras postits={postits} />}
+                </div>
+            </div>
+        </div>
+    )
+}
+
+/** Shown in the panel when nothing is selected: quick links, post-its and the log. */
+function TodayExtras({ postits }: { postits: ItemLine[] }) {
+    const s = useStore()
+    const t = today()
+    const todayLog = s.dailies[t]?.log ?? []
+    const prevDate = s.dailyDates.find((d) => d < t)
+    const prev = prevDate ? s.dailies[prevDate] : undefined
+    const stale = s.tickets
+        .filter((tk) => tk.status !== 'done' && daysBetween(tk.updated, t) >= 4)
+        .sort((a, b) => a.updated.localeCompare(b.updated))
+        .slice(0, 4)
+    return (
+        <div className="col-log">
+                    <Bookmarks />
                     <PostIts postits={postits} />
                     <div className="log-scroll">
                     <h2 className="col-title">Log</h2>
@@ -432,8 +445,6 @@ export function TodayView() {
                     )}
 
                     </div>
-                </div>
-            </div>
         </div>
     )
 }

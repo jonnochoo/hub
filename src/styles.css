@@ -949,8 +949,44 @@ main:has(.page.today) {
     flex: 1;
     min-height: 0;
     display: grid;
-    grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) minmax(0, 0.9fr);
+    grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
     gap: 20px;
+}
+.col-work {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding-right: 0;
+}
+.work-list {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    padding-right: 6px;
+}
+.today-notes-wrap {
+    flex: none;
+    height: 32%;
+    min-height: 150px;
+    display: flex;
+    flex-direction: column;
+    margin-top: 10px;
+}
+.today-notes-wrap .today-notes {
+    flex: 1;
+    height: auto;
+    min-height: 0;
+    margin-top: 6px;
+}
+.col-panel {
+    border-left: 1px solid var(--border);
+    padding-left: 16px;
+}
+.col-panel.focused {
+    border-left-color: var(--accent);
+}
+.col-panel .page {
+    max-width: none;
 }
 .col {
     min-width: 0;
