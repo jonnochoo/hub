@@ -359,6 +359,8 @@ export function TodayView() {
                 {clocked > 0 && <Chip tone="accent">⏱ {fmtMins(clocked)} clocked</Chip>}
             </PageHeader>
 
+            <ScheduleStrip />
+
             <div className="today-cols">
                 {/* ---- work ------------------------------------------------ */}
                 <div className="col col-work">
@@ -369,7 +371,6 @@ export function TodayView() {
                             {showDone ? 'Hide' : 'Show'} completed today
                         </button>
                     </h2>
-                    <ScheduleStrip />
                     {rows.length === 0 && (
                         <Empty>
                             Nothing due today. Press <kbd>a</kbd> to add a task, or plan a ticket with <kbd>t</kbd>.
