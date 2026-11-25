@@ -134,7 +134,7 @@ function ItemList({ kind }: { kind: ListKind }) {
     )
 }
 
-export function ItemDetail({ kind, index }: { kind: ListKind; index: number }) {
+export function ItemDetail({ kind, index, inline }: { kind: ListKind; index: number; inline?: { active: boolean; onBack: () => void } }) {
     const s = useStore()
     const line = s.lists[kind][index] as ItemLine
     const it = line.item
@@ -145,11 +145,11 @@ export function ItemDetail({ kind, index }: { kind: ListKind; index: number }) {
     const done = isRoutine ? it.completed === t : it.done
     const working = s.active?.kind === kind && s.active.ref === it.text
     const mode: Group = it.due ? 'due' : it.later ? 'later' : 'active'
-    const back = () => s.setOpenItem(kind, null)
+    const back = () => (inline ? inline.onBack() : s.setOpenItem(kind, null))
     const patch = (p: Parameters<typeof s.patchItem>[2]) => void s.patchItem(kind, id, p)
     const toggleClock = () => (working ? void s.stopWork() : void s.startWork({ kind, ref: it.text, label: it.text }))
 
-    useHotkeys({
+    const keys = {
         Escape: back,
         h: back,
         e: () => document.getElementById('f-text')?.focus(),
@@ -173,7 +173,8 @@ export function ItemDetail({ kind, index }: { kind: ListKind; index: number }) {
                 void s.removeItem(kind, id)
             }
         },
-    }, { modal: true })
+    }
+    useHotkeys(inline && !inline.active ? {} : keys, { modal: !inline })
 
     return (
         <div className="page detail">
