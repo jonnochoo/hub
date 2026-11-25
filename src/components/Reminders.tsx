@@ -110,28 +110,48 @@ export function Reminders() {
     )
 }
 
-/** A day timeline at the top of Today: hour ticks, a now marker, one dot per timed item. */
+// The work day, in minutes since midnight: blue work, purple lunch, yellow ready-for-home.
+const DAY_START = 8 * 60 + 30
+const DAY_END = 17 * 60
+const SEGMENTS = [
+    { from: DAY_START, to: 12 * 60, cls: 'work', label: 'Work' },
+    { from: 12 * 60, to: 13 * 60, cls: 'lunch', label: 'Lunch' },
+    { from: 13 * 60, to: 16 * 60, cls: 'work', label: 'Work' },
+    { from: 16 * 60, to: DAY_END, cls: 'home', label: 'Ready for home' },
+]
+// Split at the hour so each hour reads as its own block.
+const BLOCKS = SEGMENTS.flatMap((seg) => {
+    const out: typeof SEGMENTS = []
+    for (let from = seg.from; from < seg.to; ) {
+        const to = Math.min(seg.to, (Math.floor(from / 60) + 1) * 60)
+        out.push({ ...seg, from, to })
+        from = to
+    }
+    return out
+})
+
+/** The day timeline at the top of Today (8:30am-5pm): fills as time passes, one dot per timed item. */
 export function ScheduleStrip() {
     const timed = useTimedToday()
     const snoozed = useReminders((r) => r.snoozed)
     const ringing = useReminders((r) => r.ringing)
     const now = nowMins(new Date(useNow(true, 15_000)))
-    if (timed.length === 0) return null
 
     const effs = timed.map((t) => effMins(t, snoozed))
-    const start = Math.min(8 * 60, Math.floor(Math.min(...effs, now) / 60) * 60)
-    const end = Math.min(24 * 60, Math.max(18 * 60, Math.ceil((Math.max(...effs, now) + 1) / 60) * 60))
-    const pct = (m: number) => `${((m - start) / (end - start)) * 100}%`
+    const span = DAY_END - DAY_START
+    const clamp = (m: number) => Math.min(DAY_END, Math.max(DAY_START, m))
+    const pct = (m: number) => `${((clamp(m) - DAY_START) / span) * 100}%`
     const open = timed.filter((t) => !t.done).sort((a, b) => effMins(a, snoozed) - effMins(b, snoozed))
     const overdue = open.filter((t) => effMins(t, snoozed) <= now)
     const next = open.find((t) => effMins(t, snoozed) > now)
 
     const hours: number[] = []
-    for (let h = Math.ceil(start / 60); h * 60 <= end; h++) if (h % 2 === 0) hours.push(h)
+    for (let h = 9; h * 60 <= DAY_END; h++) hours.push(h)
 
     return (
         <div className="sched">
             <div className="sched-line">
+                <b className="sched-clock">{fmtTime12(hmOf(now))}</b>
                 {overdue.length > 0 && <span className="sched-over">{overdue.length} overdue</span>}
                 {next ? (
                     <span>
@@ -142,13 +162,22 @@ export function ScheduleStrip() {
                 )}
             </div>
             <div className="sched-bar">
-                {now >= start && now <= end && <div className="sched-fill" style={{ width: pct(now) }} />}
+                {BLOCKS.map((seg) => (
+                    <div
+                        key={seg.from}
+                        className={`sched-seg ${seg.cls}`}
+                        title={`${seg.label} ${fmtTime12(hmOf(seg.from))}–${fmtTime12(hmOf(seg.to))}`}
+                        style={{ left: pct(seg.from), width: `${((seg.to - seg.from) / span) * 100}%` }}
+                    >
+                        <div className="sched-fill" style={{ width: `${(Math.min(Math.max(now, seg.from), seg.to) - seg.from) / (seg.to - seg.from) * 100}%` }} />
+                    </div>
+                ))}
                 {hours.map((h) => (
                     <span key={h} className="sched-tick" style={{ left: pct(h * 60) }}>
                         {fmtTime12(hmOf(h * 60))}
                     </span>
                 ))}
-                {now >= start && now <= end && <span className="sched-now" style={{ left: pct(now) }} title={`Now ${fmtTime12(hmOf(now))}`} />}
+                {now >= DAY_START && now <= DAY_END && <span className="sched-now" style={{ left: pct(now) }} title={`Now ${fmtTime12(hmOf(now))}`} />}
                 {timed.map((t, i) => (
                     <span
                         key={t.key}
