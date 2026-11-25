@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useStore, type AddKind, type ViewId } from './store'
 import { useHotkeys } from './lib/hotkeys'
 import { setWindowTitle } from './lib/fs'
@@ -54,6 +54,22 @@ const DEFAULT_ADD: Partial<Record<ViewId, AddKind>> = {
 
 export default function App() {
     const s = useStore()
+    const [collapsed, setCollapsed] = useState(() => {
+        try {
+            return localStorage.getItem('hub.sidebar') === 'collapsed'
+        } catch {
+            return false
+        }
+    })
+    const toggleSidebar = () =>
+        setCollapsed((c) => {
+            try {
+                localStorage.setItem('hub.sidebar', c ? 'open' : 'collapsed')
+            } catch {
+                /* ignore */
+            }
+            return !c
+        })
 
     useEffect(() => {
         void s.init()
@@ -62,6 +78,8 @@ export default function App() {
 
     useHotkeys(
         Object.fromEntries([
+            ['C-b', toggleSidebar],
+            ['g b', toggleSidebar],
             ...NAV.map((n) => [`g ${n.key}`, () => s.setView(n.id)]),
             ['a', () => s.setModal({ type: 'add', kind: DEFAULT_ADD[s.view] ?? 'task' })],
             ['S', () => void s.stopWork()],
@@ -93,7 +111,7 @@ export default function App() {
     const navButton = (n: NavItem) => {
         const count = openCount(n.id)
         return (
-            <button key={n.id} className={`nav${s.view === n.id ? ' on' : ''}`} onClick={() => s.setView(n.id)}>
+            <button key={n.id} className={`nav${s.view === n.id ? ' on' : ''}`} title={n.label} onClick={() => s.setView(n.id)}>
                 <span className="nav-label">
                     <Icon name={n.id} />
                     {n.label}
@@ -108,8 +126,10 @@ export default function App() {
 
     return (
         <div className={`app${s.active ? ' working' : ''}`}>
-            <aside className="sidebar">
-                <div className="brand">Hub</div>
+            <aside className={`sidebar${collapsed ? ' collapsed' : ''}`}>
+                <div className="brand" onClick={toggleSidebar} title="Toggle sidebar (Ctrl+B)">
+                    {collapsed ? 'H' : 'Hub'}
+                </div>
                 {navButton(VIEW)}
                 {GROUPS.map((g) => (
                     <div key={g.title} className="nav-group">

@@ -142,7 +142,30 @@ kbd {
     padding: 12px 8px;
     gap: 2px;
 }
+.sidebar.collapsed {
+    width: 52px;
+}
+.sidebar.collapsed .nav {
+    justify-content: center;
+    padding: 6px 0;
+}
+.sidebar.collapsed .nav-label {
+    font-size: 0;
+    gap: 0;
+}
+.sidebar.collapsed .nav-right,
+.sidebar.collapsed .nav > kbd,
+.sidebar.collapsed .nav-head,
+.sidebar.collapsed .vault {
+    display: none;
+}
+.sidebar.collapsed .brand {
+    text-align: center;
+    padding-left: 0;
+    padding-right: 0;
+}
 .brand {
+    cursor: pointer;
     font-weight: 700;
     letter-spacing: 0.04em;
     padding: 4px 10px 12px;

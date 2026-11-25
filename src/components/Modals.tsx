@@ -195,6 +195,7 @@ export const SHORTCUTS: { group: string; keys: [string, string][] }[] = [
             ['g l', 'Things to learn'],
             ['g q', 'Questions'],
             ['g f', 'Future / ideas'],
+            ['Ctrl+B / g b', 'Collapse / expand sidebar'],
         ],
     },
     {
