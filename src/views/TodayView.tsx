@@ -26,6 +26,8 @@ const SECTION_TITLE: Record<Section, string> = {
     waiting: 'Waiting',
     done: 'Completed today',
 }
+/** Stable identity for manual order: row ids are regenerated on every reload, so use the file / the text. */
+const orderKey = (r: TRow) => (r.kind === 'ticket' ? r.t.file : `${r.list}|${r.item.text}`)
 const atOf = (r: TRow) => (r.kind === 'ticket' ? r.t.at : r.item.at) || '99:99'
 const WAITING: FocusGroup[] = ['blocked', 'review', 'ready-to-deploy', 'deployed-monitoring']
 const isDoneRow = (r: TRow) => (r.kind === 'ticket' ? r.t.done : r.list !== 'routine' && r.item.done)
@@ -164,7 +166,10 @@ export function TodayView() {
             })
             .map((x) => x.r)
         if (order.length === 0) return base
-        const pos = (r: TRow) => { const p = order.indexOf(r.key); return p < 0 ? Infinity : p }
+        const pos = (r: TRow) => {
+            const p = order.indexOf(orderKey(r))
+            return p < 0 ? Infinity : p
+        }
         return base.map((r, i) => ({ r, i })).sort((a, b) => pos(a.r) - pos(b.r) || a.i - b.i).map((x) => x.r)
     }, [s.tickets, s.lists, t, showDone, mode, order])
 
@@ -200,7 +205,7 @@ export function TodayView() {
         if (mode !== 'list') return s.toast('Reordering needs list view (v)')
         const j = cur + d
         if (!row || j < 0 || j >= rows.length) return
-        const keys = rows.map((r) => r.key)
+        const keys = rows.map(orderKey)
         ;[keys[cur], keys[j]] = [keys[j], keys[cur]]
         saveOrder(keys)
     }
