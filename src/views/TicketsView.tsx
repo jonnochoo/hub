@@ -146,12 +146,13 @@ export function TicketDetail({ file, inline }: { file: string; inline?: Inline }
         e: () => document.getElementById('f-title')?.focus(),
         u: () => document.getElementById('f-url')?.focus(),
         n: () => document.getElementById('notes-new-view')?.click(),
-        w: () => document.getElementById('f-next')?.focus(),
+        N: () => document.getElementById('f-next')?.focus(),
         o: () => tk.url && void openUrl(tk.url),
         s: () => (working ? void s.stopWork() : void s.startWork({ kind: 'ticket', ref: tk.file, label: ticketLabel(tk) })),
         t: () => void s.patchTicket(file, { planned: t }).then(() => s.toast('Planned for today')),
         c: toggleDone,
         '!': () => void s.patchTicket(file, { pri: !tk.pri }),
+        w: () => void s.patchTicket(file, { waiting: !tk.waiting }),
         l: () => void s.patchTicket(file, { later: true }),
         f: () => void s.patchTicket(file, { later: false, planned: '' }),
         p: () => void s.patchTicket(file, { planned: addDays(tk.planned > t ? tk.planned : t, 1) }),
@@ -170,6 +171,12 @@ export function TicketDetail({ file, inline }: { file: string; inline?: Inline }
         <div className="page detail">
             <PageHeader title={tk.key || 'Ticket'} sub={`created ${fmtDate(tk.created)} · updated ${fmtDate(tk.updated)}`}>
                 {working && s.active && <Elapsed start={s.active.start} />}
+                <button className={`btn tog${isDone ? ' on' : ''}`} onClick={toggleDone} title={isDone ? 'Done (c to reopen)' : 'Mark done (c)'}>
+                    <span className={`check${isDone ? ' on' : ''}`} /> Done <kbd>c</kbd>
+                </button>
+                <button className={`btn tog${tk.pri ? ' on' : ''}`} onClick={() => void s.patchTicket(file, { pri: !tk.pri })} title="Priority (!)">
+                    <span className="pri">!</span> <kbd>!</kbd>
+                </button>
                 <button className={`btn${working ? ' on' : ''}`} onClick={() => (working ? void s.stopWork() : void s.startWork({ kind: 'ticket', ref: tk.file, label: ticketLabel(tk) }))}>
                     {working ? 'Clock out' : 'Clock in'} <kbd>s</kbd>
                 </button>
@@ -182,7 +189,7 @@ export function TicketDetail({ file, inline }: { file: string; inline?: Inline }
                         Open <kbd>o</kbd>
                     </button>
                 </InlineField>
-                <InlineField id="f-next" label="Next (w)" value={tk.next} placeholder="What is the next step? Shown on Today" onCommit={(v) => void s.patchTicket(file, { next: v.trim() })} />
+                <InlineField id="f-next" label="Next (N)" value={tk.next} placeholder="What is the next step? Shown on Today" onCommit={(v) => void s.patchTicket(file, { next: v.trim() })} />
                 <div className="ifield">
                     <span className="ifield-label">Status (1–6)</span>
                     <div className="statuses">
@@ -191,17 +198,6 @@ export function TicketDetail({ file, inline }: { file: string; inline?: Inline }
                                 <span className={`dot ${st}`} /> {STATUS_LABEL[st]} <kbd>{i + 1}</kbd>
                             </button>
                         ))}
-                    </div>
-                </div>
-                <div className="ifield">
-                    <span className="ifield-label">State</span>
-                    <div className="seg">
-                        <button className={`status-btn${isDone ? ' on' : ''}`} onClick={toggleDone}>
-                            <span className={`check${isDone ? ' on' : ''}`} /> {isDone ? 'Done' : 'Mark done'} <kbd>c</kbd>
-                        </button>
-                        <button className={`status-btn${tk.pri ? ' on' : ''}`} onClick={() => void s.patchTicket(file, { pri: !tk.pri })}>
-                            <span className="pri">!</span> Priority <kbd>!</kbd>
-                        </button>
                     </div>
                 </div>
                 <div className="ifield">
@@ -215,6 +211,9 @@ export function TicketDetail({ file, inline }: { file: string; inline?: Inline }
                         </button>
                         <button className={`status-btn${when === 'date' ? ' on' : ''}`} onClick={() => !tk.planned && void s.patchTicket(file, { planned: t })} title="On Today from that date">
                             Date <kbd>d</kbd>
+                        </button>
+                        <button className={`status-btn${tk.waiting ? ' on' : ''}`} onClick={() => void s.patchTicket(file, { waiting: !tk.waiting })} title="Waiting on something external: moves to the Waiting section on Today">
+                            Waiting <kbd>w</kbd>
                         </button>
                         {tk.spent > 0 && <Chip>{fmtMins(tk.spent)} clocked</Chip>}
                     </div>

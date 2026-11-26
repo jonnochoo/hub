@@ -29,10 +29,11 @@ const SECTION_TITLE: Record<Section, string> = {
 /** Stable identity for manual order: row ids are regenerated on every reload, so use the file / the text. */
 const orderKey = (r: TRow) => (r.kind === 'ticket' ? r.t.file : `${r.list}|${r.item.text}`)
 const atOf = (r: TRow) => (r.kind === 'ticket' ? r.t.at : r.item.at) || '99:99'
-const WAITING: FocusGroup[] = ['blocked', 'review', 'ready-to-deploy', 'deployed-monitoring']
 const isDoneRow = (r: TRow) => (r.kind === 'ticket' ? r.t.done : r.list !== 'routine' && r.item.done)
+/** Waiting is a flag any type can carry (routines excluded: they recur). */
+const isWaiting = (r: TRow) => (r.kind === 'ticket' ? r.t.waiting : r.list !== 'routine' && !!r.item.waiting)
 const sectionOf = (r: TRow): Section =>
-    isDoneRow(r) ? 'done' : r.kind === 'ticket' ? (WAITING.includes(r.t.status) ? 'waiting' : 'focus') : r.list === 'tasks' ? 'focus' : r.list
+    isDoneRow(r) ? 'done' : isWaiting(r) ? 'waiting' : r.kind === 'ticket' ? 'focus' : r.list === 'tasks' ? 'focus' : r.list
 
 /** HH:MM a row was completed today (earlier-than-known completions sort first), or null if it is not done. */
 const finishedAt = (r: TRow, day: string): string | null => {
@@ -150,10 +151,10 @@ export function TodayView() {
                 for (const l of s.lists[list]) if (l.item && l.item.done && l.item.completed === t) finished.push({ kind: 'item', list, key: l.id, id: l.id, item: l.item, date: t })
         }
 
-        // Column order: everything active first, then the "waiting" tickets that live in the third column.
-        const active = focus.filter((r) => sectionOf(r) === 'focus')
-        const waiting = focus.filter((r) => sectionOf(r) === 'waiting')
-        const grouped = [...routineShown, ...active, ...dueOf('questions'), ...dueOf('learn'), ...finished, ...waiting]
+        // Anything flagged waiting (a deploy to test, a reply...), of any type, gets its own section under Active.
+        const open = [...focus, ...dueOf('questions'), ...dueOf('learn')]
+        const waiting = open.filter((r) => sectionOf(r) === 'waiting')
+        const grouped = [...routineShown, ...open.filter((r) => sectionOf(r) !== 'waiting'), ...waiting, ...finished]
         if (mode === 'grouped') return grouped
         // Straight list: completed first (by completion time), then timed, then by type; manual order (J / K) wins once set.
         const base = grouped
@@ -165,12 +166,14 @@ export function TodayView() {
                 return atOf(a.r).localeCompare(atOf(b.r)) || (a.r.kind === 'ticket' ? 0 : TYPE_RANK[a.r.list]) - (b.r.kind === 'ticket' ? 0 : TYPE_RANK[b.r.list]) || a.i - b.i
             })
             .map((x) => x.r)
-        if (order.length === 0) return base
+        // Waiting always sits below everything else, even with a manual order.
+        const waitLast = (rs: TRow[]) => [...rs.filter((r) => sectionOf(r) !== 'waiting'), ...rs.filter((r) => sectionOf(r) === 'waiting')]
+        if (order.length === 0) return waitLast(base)
         const pos = (r: TRow) => {
             const p = order.indexOf(orderKey(r))
             return p < 0 ? Infinity : p
         }
-        return base.map((r, i) => ({ r, i })).sort((a, b) => pos(a.r) - pos(b.r) || a.i - b.i).map((x) => x.r)
+        return waitLast(base.map((r, i) => ({ r, i })).sort((a, b) => pos(a.r) - pos(b.r) || a.i - b.i).map((x) => x.r))
     }, [s.tickets, s.lists, t, showDone, mode, order])
 
     const { cur, setC, nav } = useCursor(rows.length)
@@ -223,6 +226,14 @@ export function TodayView() {
             s.toast('Order reset: by time, then type')
         },
         x: () => (row?.kind === 'ticket' ? void s.setTicketDone(row.t.file, !row.t.done) : row && void s.toggleItem(row.list, row.id)),
+        // w: toggle Waiting (on a deploy, a reply...). Moves the row to the Waiting section; works on any type.
+        w: () => {
+            if (!row || (row.kind === 'item' && row.list === 'routine')) return
+            const on = !isWaiting(row)
+            if (row.kind === 'ticket') void s.patchTicket(row.t.file, { waiting: on })
+            else void s.patchItem(row.list, row.id, { waiting: on || undefined })
+            s.toast(on ? 'Waiting: moved below Active' : 'Back to Active')
+        },
         // Same keys as the detail views, applied to the highlighted row.
         l: () => {
             if (!row || (row.kind === 'item' && row.list === 'routine')) return
@@ -273,8 +284,8 @@ export function TodayView() {
             if (row.kind === 'ticket') promptDate('Plan ticket for', row.t.planned, (v) => s.patchTicket(row.t.file, { planned: v }))
             else promptDate('Due date', row.item.due, (v) => s.patchItem(row.list, row.id, { due: v || undefined }))
         },
-        // w: set a reminder time (today only). Empty clears. z: snooze a ringing / due reminder.
-        w: () => {
+        // T: set a reminder time (today only). Empty clears. z: snooze a ringing / due reminder.
+        T: () => {
             if (!row) return
             const cur = row.kind === 'ticket' ? row.t.at : row.item.at
             promptTime('Remind at', cur, (v) => {
@@ -286,7 +297,7 @@ export function TodayView() {
         },
         z: () => {
             const tm = row && timeOf(row)
-            if (!tm) return s.toast('No reminder on this row (w sets one)')
+            if (!tm) return s.toast('No reminder on this row (T sets one)')
             useReminders.getState().snooze([tm.key])
             s.toast('Snoozed 10 minutes')
         },
@@ -353,7 +364,7 @@ export function TodayView() {
                         const sec = sectionOf(r)
                         const prevRow = list[n - 1]?.r
                         const head =
-                            mode === 'grouped' && (!prevRow || sectionOf(prevRow) !== sec) ? (
+                            (mode === 'grouped' || sec === 'waiting') && (!prevRow || sectionOf(prevRow) !== sec) ? (
                                 <h3 className="group">
                                     {SECTION_TITLE[sec]}
                                     {sec === 'routine' && (
@@ -364,7 +375,7 @@ export function TodayView() {
                                     )}
                                 </h3>
                             ) : null
-                        const fg = sec === 'focus' || sec === 'waiting' ? focusGroupOf(r) : null
+                        const fg = sec === 'focus' ? focusGroupOf(r) : null
                         const subHead =
                             mode === 'grouped' && fg && (!prevRow || sectionOf(prevRow) !== 'focus' || focusGroupOf(prevRow) !== fg) ? (
                                 <h4 className="group sub">{FOCUS_LABEL[fg]}</h4>
@@ -451,7 +462,7 @@ export function TodayView() {
                 <div className="col col-work">
                     <div className="work-list">
                     <h2 className="col-title">
-                        Active <span className="muted">(w sets a time)</span>
+                        Active <span className="muted">(T sets a time · w waiting)</span>
                         <button className="toggle-done" onClick={() => setMode(mode === 'list' ? 'grouped' : 'list')} title="Switch list / grouped view (v). In list view J / K reorder, V resets">
                             {mode === 'list' ? 'Grouped' : 'List'} view
                         </button>

@@ -11,6 +11,7 @@ export interface Item {
     pri?: boolean
     at?: string // time of day 'HH:MM' for a Today reminder
     later?: boolean // parked: no date yet, deliberately not now
+    waiting?: boolean // blocked on something external (a deploy, a reply). Still on Today, in its own section
     every?: string // routine schedule: 'daily', or e.g. 'mon,wed,fri'. Undefined = weekdays
     notes: string[]
 }
@@ -53,6 +54,10 @@ function parseItemText(s: string): Omit<Item, 'done' | 'notes'> {
         out.later = true
         return ''
     })
+    out.text = out.text.replace(/(?:^|\s)@waiting(?=\s|$)/g, () => {
+        out.waiting = true
+        return ''
+    })
     out.text = out.text.replace(/(?:^|\s)every:([a-z,]+)(?=\s|$)/gi, (m, v: string) => {
         const n = normalizeEvery(v)
         if (n === null) return m
@@ -88,6 +93,7 @@ export function serializeItem(it: Item): string[] {
     let head = `- [${it.done ? 'x' : ' '}] ${it.text}`
     if (it.pri) head += ' !'
     if (it.later) head += ' @later'
+    if (it.waiting) head += ' @waiting'
     if (it.every) head += ` every:${it.every}`
     if (it.due) head += ` due:${it.due}`
     if (it.at) head += ` at:${it.at}`

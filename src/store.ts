@@ -287,6 +287,7 @@ export const useStore = create<State>((set, get) => {
                 at: '',
                 later: !!later && !planned,
                 pri: false,
+                waiting: false,
                 spent: 0,
                 subtasks: [],
                 next: '',
@@ -493,7 +494,7 @@ folder and reloads when files change.
   indented lines are notes for the item above
 \`\`\`
 
-- Tasks, learn and questions are either dated (\`due:\`, on Today from that day) or parked (\`@later\`). With neither the item is Active: always on Today until done.
+- Tasks, learn and questions are either dated (\`due:\`, on Today from that day) or parked (\`@later\`). With neither the item is Active: always on Today until done. \`@waiting\` (or \`waiting: true\` on a ticket) marks it as waiting on something external: it stays on Today but in a separate Waiting section.
 - Routine items run on weekdays (mon..fri) by default. \`every:daily\` includes weekends; \`every:mon,wed,fri\` picks days. They only show on Today on those days.
 - \`!\` marks high priority, \`due:\` is the due date, \`added:\` / \`done:\` are bookkeeping dates (ISO).
 - Other lines (headings, prose) are preserved as-is.

@@ -164,6 +164,7 @@ export function ItemDetail({ kind, index, inline }: { kind: ListKind; index: num
         t: () => patch({ due: t }),
         p: () => patch({ due: addDays(it.due && it.due > t ? it.due : t, 1) }),
         '!': () => patch({ pri: !it.pri }),
+        w: () => triaged && patch({ waiting: it.waiting ? undefined : true }),
         c: () => void s.toggleItem(kind, id),
         s: toggleClock,
         o: () => !openFirstUrl(it.text, ...it.notes) && s.toast('No link in this item'),
@@ -180,6 +181,14 @@ export function ItemDetail({ kind, index, inline }: { kind: ListKind; index: num
         <div className="page detail">
             <PageHeader title={SINGULAR[kind]} sub={`added ${it.added ? fmtDate(it.added) : '—'}${it.completed ? ` · completed ${fmtDate(it.completed)}` : ''}`}>
                 {working && s.active && <Elapsed start={s.active.start} />}
+                <button className={`btn tog${done ? ' on' : ''}`} onClick={() => void s.toggleItem(kind, id)} title={done ? 'Done (c to reopen)' : 'Mark done (c)'}>
+                    <span className={`check${done ? ' on' : ''}`} /> Done <kbd>c</kbd>
+                </button>
+                {!isRoutine && (
+                    <button className={`btn tog${it.pri ? ' on' : ''}`} onClick={() => patch({ pri: !it.pri })} title="Priority (!)">
+                        <span className="pri">!</span> <kbd>!</kbd>
+                    </button>
+                )}
                 <button className={`btn${working ? ' on' : ''}`} onClick={toggleClock}>
                     {working ? 'Clock out' : 'Clock in'} <kbd>s</kbd>
                 </button>
@@ -200,6 +209,9 @@ export function ItemDetail({ kind, index, inline }: { kind: ListKind; index: num
                             </button>
                             <button className={`status-btn${mode === 'due' ? ' on' : ''}`} onClick={() => !it.due && patch({ due: t })} title="On Today from that date">
                                 Date <kbd>d</kbd>
+                            </button>
+                            <button className={`status-btn${it.waiting ? ' on' : ''}`} onClick={() => patch({ waiting: it.waiting ? undefined : true })} title="Waiting on something external: moves to the Waiting section on Today">
+                                Waiting <kbd>w</kbd>
                             </button>
                         </div>
                     </div>
@@ -247,20 +259,6 @@ export function ItemDetail({ kind, index, inline }: { kind: ListKind; index: num
                         </div>
                     </>
                 )}
-
-                <div className="ifield">
-                    <span className="ifield-label">State</span>
-                    <div className="seg">
-                        <button className={`status-btn${done ? ' on' : ''}`} onClick={() => void s.toggleItem(kind, id)}>
-                            <span className={`check${done ? ' on' : ''}`} /> {done ? 'Done' : 'Mark done'} <kbd>c</kbd>
-                        </button>
-                        {!isRoutine && (
-                            <button className={`status-btn${it.pri ? ' on' : ''}`} onClick={() => patch({ pri: !it.pri })}>
-                                <span className="pri">!</span> Priority <kbd>!</kbd>
-                            </button>
-                        )}
-                    </div>
-                </div>
             </div>
 
             <h3 className="group">

@@ -60,6 +60,7 @@ export interface Ticket {
     at: string // time of day 'HH:MM' for a Today reminder ('' = none). Only alerts on the planned day
     later: boolean // parked. No planned date and not later = active (always on Today)
     pri: boolean // priority, same ! flag as tasks
+    waiting: boolean // waiting on something external; shown in Today's Waiting section
     spent: number // minutes clocked
     subtasks: Line[]
     next: string // what to do next; shown on Today
@@ -67,7 +68,7 @@ export interface Ticket {
     extra: Record<string, string> // unknown frontmatter, preserved for agents/humans
 }
 
-const KNOWN = ['key', 'title', 'url', 'status', 'created', 'updated', 'planned', 'at', 'done', 'doneAt', 'later', 'priority', 'spent', 'next']
+const KNOWN = ['key', 'title', 'url', 'status', 'created', 'updated', 'planned', 'at', 'done', 'doneAt', 'later', 'priority', 'waiting', 'spent', 'next']
 
 export function parseTicket(file: string, src: string): Ticket {
     const { fm, body } = parseDoc(src)
@@ -92,6 +93,7 @@ export function parseTicket(file: string, src: string): Ticket {
         at: /^\d{2}:\d{2}$/.test(fm.at ?? '') ? fm.at : '',
         later: fm.later === 'true' || fm.planned === 'later',
         pri: fm.priority === 'true',
+        waiting: fm.waiting === 'true',
         spent: Number(fm.spent) || 0,
         subtasks: parseList(sub.lines.join('\n')),
         next: fm.next ?? '',
@@ -114,6 +116,7 @@ export function serializeTicket(t: Ticket): string {
         doneAt: t.done ? t.doneAt : '',
         later: t.later ? 'true' : '',
         priority: t.pri ? 'true' : '',
+        waiting: t.waiting ? 'true' : '',
         spent: t.spent ? String(t.spent) : '',
         next: t.next,
         ...t.extra,

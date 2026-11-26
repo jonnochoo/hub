@@ -68,6 +68,10 @@ Routine is the one exception on done: items never stay ticked. They count as don
 
 Status is the workflow stage. **Done is a separate flag**, so a ticket can be deployed + monitoring and not yet done, or done at any stage. Old `status: done` files are read as done + `deployed-monitoring`.
 
+### Waiting is a flag, not a status
+
+`waiting` (`@waiting` on list items, `waiting: true` on tickets, key `w`) means parked on something external: a deploy to test, a reply. It works on tickets, tasks, questions and learn, independent of date and status. The item stays on Today but moves to a Waiting section under Active, so the Active list is only what needs me now. Routine items cannot wait.
+
 ## Today
 
 - A strip across the top shows the work day (8:30am to 5pm) in one-hour blocks: blue work, purple lunch (12 to 1pm), yellow ready for home (4 to 5pm). Blocks fill as time passes; timed items are dots on it.
@@ -78,7 +82,7 @@ Status is the workflow stage. **Done is a separate flag**, so a ticket can be de
 
 ## State of play
 
-**Consistent already:** done flag, completion time and priority across every type; reminder time (`at`) everywhere; same keys for complete (`c`/`x`), priority (`!`), time (`w`), later (`l`), active (`f`), date (`d`), today (`t`), postpone (`p`); strike-through for completed on Today; one When model.
+**Consistent already:** done flag, completion time and priority across every type; reminder time (`at`) everywhere; same keys for complete (`c`/`x`), priority (`!`), time (`T`), waiting (`w`), later (`l`), active (`f`), date (`d`), today (`t`), postpone (`p`); strike-through for completed on Today; one When model.
 
 **Gaps to close, in rough order:**
 
